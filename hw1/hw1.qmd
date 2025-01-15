@@ -39,6 +39,10 @@ sessionInfo()
 
 This exercise (and later in this course) uses the [MIMIC-IV data v3.1](https://physionet.org/content/mimiciv/3.1/), a freely accessible critical care database developed by the MIT Lab for Computational Physiology. Follow the instructions at <https://mimic.mit.edu/docs/gettingstarted/> to (1) complete the CITI `Data or Specimens Only Research` course and (2) obtain the PhysioNet credential for using the MIMIC-IV data. Display the verification links to your completion report and completion certificate here. **You must complete Q2 before working on the remaining questions.** (Hint: The CITI training takes a few hours and the PhysioNet credentialing takes a couple days; do not leave it to the last minute.)
 
+**Solution:** 
+CITI Conflicts of Interest Course - [Completetion Report](https://www.citiprogram.org/verify/?k0a45489b-60dd-4a66-bdee-455048a65e4e-67209991)/[Completetion Certificiate](https://www.citiprogram.org/verify/?wa8b11e53-e354-4bcd-ad32-cd259773ce85-67209991)
+CITI Data or Specimens Only Research - [Completetion Report](https://www.citiprogram.org/verify/?kec805388-2cb9-4ae7-8ff2-137657525315-67209990)/[Completetion Certificiate](https://www.citiprogram.org/verify/?w80e757a3-49df-4796-a834-f5aa34e6db9d-67209990)
+
 ## Q3. Linux Shell Commands
 
 1. Make the MIMIC-IV v3.1 data available at location `~/mimic`. The output of the `ls -l ~/mimic` command should be similar to the below (from my laptop).
