@@ -232,6 +232,9 @@ do
 done
 ```
 
+**Solution:**
+wget is a Bash command that can download files from websites. The -nc option prevents the file from getting clobbered. This means it is not overwritten if it already exists in the directory and is renamed with an incrementing counter based on how many copies have been installed.
+
 2. What's the difference between the following two commands?
 ```{bash}
 #| eval: false
@@ -243,6 +246,10 @@ and
 echo 'hello, world' >> test2.txt
 ```
 
+**Solution:**
+`>` Overwrites the content in the file following the symbol with the text preceding the symbol.
+`>>` Appends the text preceding the symbol to the end of the content in the file following the symbol.
+
 3. Using your favorite text editor (e.g., `vi`), type the following and save the file as `middle.sh`:
 ```{bash eval=FALSE}
 #!/bin/sh
@@ -253,13 +260,22 @@ head -n "$2" "$1" | tail -n "$3"
 Using `chmod` to make the file executable by the owner, and run
 ```{bash}
 #| eval: false
+chmod +x middle.sh
 ./middle.sh pg42671.txt 20 5
 ```
 Explain the output. Explain the meaning of `"$1"`, `"$2"`, and `"$3"` in this shell script. Why do we need the first line of the shell script?
 
+**Solution:**
+This output is the last five of the first 20 lines in the full text of *Pride and Prejudice* by Jane Austen from Project Gutenberg. `"$1"`, `"$2"`, and `"$3"` are input variables into the shell script in the order typed in the command line. `"$1"` is the file path. `"$2"` is the number of lines to take the head of. `"$3"` is the number of lines to take the tail end.
+
 ## Q5. More fun with Linux
 
 Try following commands in Bash and interpret the results: `cal`, `cal 2025`, `cal 9 1752` (anything unusual?), `date`, `hostname`, `arch`, `uname -a`, `uptime`, `who am i`, `who`, `w`, `id`, `last | head`, `echo {con,pre}{sent,fer}{s,ed}`, `time sleep 5`, `history | tail`.
+
+**Solution:**
+```{bash}
+cal
+```
 
 ## Q6. Book
 
