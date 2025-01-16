@@ -293,7 +293,7 @@ echo ''
 zcat < ~/mimic/hosp/labevents.csv.gz | wc -l
 
 #Unzipping the compressed file labevents.csv.gz.
-gzip -dk ~/mimic/hosp/labevents.csv.gz ./labevents
+gzip -dk ~/mimic/hosp/labevents.csv.gz ~/mimic/hosp/labevents
 
 #Running wc on the uncompressed file labevents.csv
 wc -l ~/mimic/hosp/labevents.csv
