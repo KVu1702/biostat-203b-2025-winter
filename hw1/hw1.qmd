@@ -276,6 +276,82 @@ Try following commands in Bash and interpret the results: `cal`, `cal 2025`, `ca
 ```{bash}
 cal
 ```
+cal is a Bash command that displays the present month's calendar dates.
+
+```{bash}
+cal 2025
+```
+By adding the year, cal displays all calendar  dates for the year.
+
+```{bash}
+cal 9 1752
+```
+By adding the month and the year to cal, cal displays the calendar date for the specified month and year. However, for this specific month and year, we are missing the dates of 3-13.
+
+```{bash}
+date
+```
+date is a Bash command that displays information about the current date.
+
+```{bash}
+hostname
+```
+hostname is a Bash command that displays current host/computer information.
+
+```{bash}
+arch
+```
+arch is a Bash command that displays information about the architecture of the current host/computer.
+
+```{bash}
+uname -a
+```
+uname is a Bash command that displays information about the current operating system. The -a option adds more information, including system architecture, hostname, etc.
+
+```{bash}
+uptime
+```
+uptime is a Bash command that displays the system uptime, number of users, and load times for the past 1, 5, and 15 minutes.
+
+```{bash}
+whoami
+```
+whoami is a Bash command that displays the user's username.
+
+```{bash}
+who
+```
+who is a Bash command that displays the number and usernames of currently logged-in users and the time of the last system boot.
+
+```{bash}
+w
+```
+w is a Bash command displaying information about current users, including computer usage, running programs, usernames, load times, etc. It displays information from whoami and who as well.
+
+```{bash}
+id
+```
+id is a Bash command that displays the user and group names and IDs.
+
+```{bash}
+last | head
+```
+last is a Bash command that displays each user's previous login information. By default, head prints the first ten lines or the first ten logins.
+
+```{bash}
+echo {con,pre}{sent,fer}{s,ed}`
+```
+This command prints all words matching a combination of con or pre, sent or fer, and s or ed.
+
+```{bash}
+time sleep 5`
+```
+This command puts the console to sleep for 5 seconds.
+
+```{bash}
+history | tail
+```
+history is a bash command that displays the command history in the console. By default, tail prints the last ten lines or ten most recent commands.
 
 ## Q6. Book
 
@@ -287,5 +363,5 @@ The point of this exercise is (1) to obtain the book for free and (2) to see an 
 
 For grading purpose, include a screenshot of Section 4.1.5 of the book here.
 
-![Section 4.1.5 of Reproducible Research with R and RStudio](~/biostat-203b-hw/hw1/rep-res-3rd-edition.png)
+![Section 4.1.5 of Reproducible Research with R and RStudio](~/biostat-203b-hw/hw1/rep-res-3rd-edition-4_1_5.png)
 
