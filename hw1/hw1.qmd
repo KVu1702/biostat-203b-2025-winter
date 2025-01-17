@@ -1,7 +1,7 @@
 ---
 title: "Biostat 203B Homework 1"
 subtitle: Due Jan 24, 2024 @ 11:59PM
-author: Your Name and UID
+author: Khoa Vu 705600710
 format:
   html:
     theme: cosmo
@@ -160,7 +160,8 @@ Display the number of lines in each data file using a similar loop.
 #| eval: false
 for datafile in ~/mimic/hosp/{a,l,pa}*.gz
 do
-  # For each file that starts with a, l, or pa, count the number of lines with wc and the -l option for lines.
+  # For each file that starts with a, l, or pa, count the number of lines with 
+  # wc and the -l option for lines.
   zcat < $datafile | wc -l
 done
 ```
@@ -189,26 +190,36 @@ echo 'The total count of lines in admissions.csv.gz, minus the header, are:'
 zcat < ~/mimic/hosp/admissions.csv.gz | tail -n +2 | wc -l
 echo ''
 
-# Counting the number of unique values in the second column, hadm_id, minus the header, using the Bash command awk.
-# awk scans files line by line. The -F option in awk determines the delimiter for the file, and {print $2} prints the value after the second delimiter, representing the second column.
+# Counting the number of unique values in the second column, hadm_id, minus the 
+# header, using the Bash command awk.
+# awk scans files line by line. The -F option in awk determines the delimiter 
+# for the file, and {print $2} prints the value after the second delimiter, 
+# representing the second column.
 # For a .csv file, this delimiter is a ','
-# sort is a bash command that sorts values. We sort because the uniq bash command only removes and identifies duplicates directly adjacent.
+# sort is a bash command that sorts values. We sort because the uniq bash 
+# command only removes and identifies duplicates directly adjacent.
 # The bash command uniq with option -c counts the occurrences.
-# We sort again using -n, an option that sorts numerically, and -r, an option for reverse order (descending instead of ascending).
-# Using wc -l to count the number of rows counted by uniq. Repeated values are compressed to one line, a count followed by the counted instance.
+# We sort again using -n, an option that sorts numerically, and -r, an option 
+# for reverse order (descending instead of ascending).
+# Using wc -l to count the number of rows counted by uniq. Repeated values are 
+# compressed to one line, a count followed by the counted instance.
 
-echo 'The total count of hadm_id in admissions.csv.gz, minus the header, are:'
-zcat < ~/mimic/hosp/admissions.csv.gz | tail -n +2 | awk -F ',' '{print $2}' | sort | uniq -c | sort -nr | wc -l
+echo 'The count of unique hadm_id in admissions.csv.gz, minus the header, are:'
+zcat < ~/mimic/hosp/admissions.csv.gz | tail -n +2 | awk -F ',' '{print $2}' | 
+sort | uniq -c | wc -l
 echo ''
 
-#Counting the number of unique patients/subject_id, the first column in admissions.csv.gz.
-echo 'The total count of unique patients by subject_id in admissions.csv.gz, minus the header, are:'
-zcat < ~/mimic/hosp/admissions.csv.gz | tail -n +2 | awk -F ',' '{print $1}' | sort | uniq -c | sort -nr | wc -l
+# Counting the number of unique patients/subject_id, the first column in 
+# admissions.csv.gz.
+echo 'The count of unique patients by subject_id in admissions.csv.gz, are:'
+zcat < ~/mimic/hosp/admissions.csv.gz | tail -n +2 | awk -F ',' '{print $1}' | 
+sort | uniq -c | wc -l
 echo ''
 
 #subject_id is the first column in patients.csv.gz.
-echo 'The total count of unique patients by subject_id in patients.csv.gz, minus the header, are:'
-zcat < ~/mimic/hosp/patients.csv.gz | tail -n +2 | awk -F ',' '{print $1}' | sort | uniq -c | sort -nr | wc -l
+echo 'The total count of unique patients by subject_id in patients.csv.gz, are:'
+zcat < ~/mimic/hosp/patients.csv.gz | tail -n +2 | awk -F ',' '{print $1}' | 
+sort | uniq -c | wc -l
 echo ''
 
 ```
@@ -231,22 +242,26 @@ some patients did not get hospitalized.
 
 #admission_type is the sixth column in admissions.csv.gz.
 echo 'The possible values for admission types and their frequencies are:'
-zcat < ~/mimic/hosp/admissions.csv.gz | tail -n +2 | awk -F ',' '{print $6}' | sort | uniq -c | sort -nr
+zcat < ~/mimic/hosp/admissions.csv.gz | tail -n +2 | awk -F ',' '{print $6}' | 
+sort | uniq -c | sort -nr
 echo ''
 
 #admission_location is the eighth column in admissions.csv.gz.
 echo 'The possible values for admission location and their frequencies are:'
-zcat < ~/mimic/hosp/admissions.csv.gz | tail -n +2 | awk -F ',' '{print $8}' | sort | uniq -c | sort -nr
+zcat < ~/mimic/hosp/admissions.csv.gz | tail -n +2 | awk -F ',' '{print $8}' | 
+sort | uniq -c | sort -nr
 echo ''
 
 #insurance is the tenth column in admissions.csv.gz.
 echo 'The possible values for insurance and their frequencies are:'
-zcat < ~/mimic/hosp/admissions.csv.gz | tail -n +2 | awk -F ',' '{print $10}' | sort | uniq -c | sort -nr
+zcat < ~/mimic/hosp/admissions.csv.gz | tail -n +2 | awk -F ',' '{print $10}' | 
+sort | uniq -c | sort -nr
 echo ''
 
 #ethnicity/race is the tenth column in admissions.csv.gz.
 echo 'The possible values for ethnicity/race and their frequencies are:'
-zcat < ~/mimic/hosp/admissions.csv.gz | tail -n +2 | awk -F ',' '{print $13}' | sort | uniq -c | sort -nr
+zcat < ~/mimic/hosp/admissions.csv.gz | tail -n +2 | awk -F ',' '{print $13}' | 
+sort | uniq -c | sort -nr
 echo ''
 
 ```
@@ -265,13 +280,15 @@ zcat < ~/mimic/icu/icustays.csv.gz | head -5
 echo ''
 
 #stay_id is the third column of icustays.csv.gz.
-echo 'The total count of ICU stays by stay_id in icustays.csv.gz, minus the header, are:'
-zcat < ~/mimic/icu/icustays.csv.gz | tail -n +2 | awk -F ',' '{print $3}' | sort | uniq -c | sort -nr | wc -l
+echo 'The total count of ICU stays by stay_id in icustays.csv.gz are:'
+zcat < ~/mimic/icu/icustays.csv.gz | tail -n +2 | awk -F ',' '{print $3}' | 
+sort | uniq -c | sort -nr | wc -l
 echo ''
 
 #subject_id is the third column of icustays.csv.gz
-echo 'The total count of unique patients by subject_id in icustays.csv.gz, minus the header, are:'
-zcat < ~/mimic/icu/icustays.csv.gz | tail -n +2 | awk -F ',' '{print $1}' | sort | uniq -c | sort -nr | wc -l
+echo 'The total count of unique patients by subject_id in icustays.csv.gz, are:'
+zcat < ~/mimic/icu/icustays.csv.gz | tail -n +2 | awk -F ',' '{print $1}' | 
+sort | uniq -c | sort -nr | wc -l
 echo ''
 
 ```
