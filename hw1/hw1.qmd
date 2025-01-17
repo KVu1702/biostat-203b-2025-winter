@@ -293,7 +293,7 @@ echo ''
 zcat < ~/mimic/hosp/labevents.csv.gz | wc -l
 
 #Unzipping the compressed file labevents.csv.gz.
-gzip -dk ~/mimic/hosp/labevents.csv.gz ~/mimic/hosp/labevents
+gzip -dk ~/mimic/hosp/labevents.csv.gz
 
 #Running wc on the uncompressed file labevents.csv
 wc -l ~/mimic/hosp/labevents.csv
@@ -536,5 +536,12 @@ TexLive packages.
 For grading purpose, include a screenshot of Section 4.1.5 of the book
 here.
 
-![Section 4.1.5 of Reproducible Research with R and
-RStudio](~/biostat-203b-hw/hw1/rep-res-3rd-edition-4_1_5.png)
+**Solution:**
+
+<p align="center">
+
+<img src="./rep-res-3rd-edition-4_1_5.png" height="400" width="600"/>
+
+</p>
+
+Section 4.1.5 of Reproducible Research with R and RStudio
