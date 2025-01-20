@@ -111,10 +111,12 @@ Use Bash commands to answer following questions.
 **Solution:**
 
 ```{bash}
+#| eval: true
 ls -l ~/mimic/hosp/
 ```
 
 ```{bash}
+#| eval: true
 ls -l ~/mimic/icu/
 ```
 
@@ -143,7 +145,7 @@ Exit `more` by pressing the q key and scroll/page using the spacebar.
 4.  (Looping in Bash) What's the output of the following bash script?
 
 ```{bash}
-#| eval: false
+#| eval: true
 for datafile in ~/mimic/hosp/{a,l,pa}*.gz
 do
   ls -l $datafile
@@ -157,7 +159,7 @@ Display the number of lines in each data file using a similar loop.
 /mimic/hosp/ that starts with a, l, or pa.
 
 ```{bash}
-#| eval: false
+#| eval: true
 for datafile in ~/mimic/hosp/{a,l,pa}*.gz
 do
   # For each file that starts with a, l, or pa, count the number of lines with 
@@ -177,6 +179,7 @@ done
 **Solution:**
 
 ```{bash}
+#| eval: true
 
 # Printing the first 10 rows in admissions.csv.gz
 echo 'The first ten lines of admissions.csv.gz are:'
@@ -239,6 +242,7 @@ some patients did not get hospitalized.
 **Solution:**
 
 ```{bash}
+#| eval: true
 
 #admission_type is the sixth column in admissions.csv.gz.
 echo 'The possible values for admission types and their frequencies are:'
@@ -274,6 +278,8 @@ echo ''
 **Solution:**
 
 ```{bash}
+#| eval: true
+
 # Printing the first 5 rows in icustays.csv.gz.
 echo 'The first 5 lines of icustays.csv.gz are:'
 zcat < ~/mimic/icu/icustays.csv.gz | head -5
@@ -305,6 +311,7 @@ echo ''
 **Solution:**
 
 ```{bash}
+#| eval: true
 
 #Running wc on the compressed file labevents.csv.gz.
 zcat < ~/mimic/hosp/labevents.csv.gz | wc -l
@@ -338,7 +345,7 @@ software.
     your local folder.
 
 ```{bash}
-#| eval: false
+#| eval: true
 wget -nc http://www.gutenberg.org/cache/epub/42671/pg42671.txt
 ```
 
@@ -347,7 +354,7 @@ Explain what `wget -nc` does. Do **not** put this text file
 of times each of the four characters is mentioned using Linux commands.
 
 ```{bash}
-#| eval: false
+#| eval: true
 wget -nc http://www.gutenberg.org/cache/epub/42671/pg42671.txt
 for char in Elizabeth Jane Lydia Darcy
 do
@@ -360,19 +367,21 @@ done
 websites. The -nc option prevents the file from getting clobbered. This
 means it is not overwritten if it already exists in the directory and is
 renamed with an incrementing counter based on how many copies have been
-installed.
+installed. In *Pride and Prejudice*, Elizabeth is mentioned 634 times,
+Jane is mentioned 293 times, Lydia is mentioned 170 times, and Darcy is
+mentioned 417 times, making you correct.
 
 2.  What's the difference between the following two commands?
 
 ```{bash}
-#| eval: false
+#| eval: true
 echo 'hello, world' > test1.txt
 ```
 
 and
 
 ```{bash}
-#| eval: false
+#| eval: true
 echo 'hello, world' >> test2.txt
 ```
 
@@ -394,7 +403,7 @@ head -n "$2" "$1" | tail -n "$3"
 Using `chmod` to make the file executable by the owner, and run
 
 ```{bash}
-#| eval: false
+#| eval: true
 chmod +x middle.sh
 ./middle.sh pg42671.txt 20 5
 ```
@@ -420,18 +429,21 @@ Try following commands in Bash and interpret the results: `cal`,
 **Solution:**
 
 ```{bash}
+#| eval: true
 cal
 ```
 
 cal is a Bash command that displays the present month's calendar dates.
 
 ```{bash}
+#| eval: true
 cal 2025
 ```
 
 By adding the year, cal displays all calendar dates for the year.
 
 ```{bash}
+#| eval: true
 cal 9 1752
 ```
 
@@ -440,12 +452,14 @@ for the specified month and year. However, for this specific month and
 year, we are missing the dates of 3-13.
 
 ```{bash}
+#| eval: true
 date
 ```
 
 date is a Bash command that displays information about the current date.
 
 ```{bash}
+#| eval: true
 hostname
 ```
 
@@ -453,6 +467,7 @@ hostname is a Bash command that displays current host/computer
 information.
 
 ```{bash}
+#| eval: true
 arch
 ```
 
@@ -460,6 +475,7 @@ arch is a Bash command that displays information about the architecture
 of the current host/computer.
 
 ```{bash}
+#| eval: true
 uname -a
 ```
 
@@ -468,6 +484,7 @@ operating system. The -a option adds more information, including system
 architecture, hostname, etc.
 
 ```{bash}
+#| eval: true
 uptime
 ```
 
@@ -475,12 +492,14 @@ uptime is a Bash command that displays the system uptime, number of
 users, and load times for the past 1, 5, and 15 minutes.
 
 ```{bash}
+#| eval: true
 whoami
 ```
 
 whoami is a Bash command that displays the user's username.
 
 ```{bash}
+#| eval: true
 who
 ```
 
@@ -488,6 +507,7 @@ who is a Bash command that displays the number and usernames of
 currently logged-in users and the time of the last system boot.
 
 ```{bash}
+#| eval: true
 w
 ```
 
@@ -496,12 +516,14 @@ including computer usage, running programs, usernames, load times, etc.
 It displays information from whoami and who as well.
 
 ```{bash}
+#| eval: true
 id
 ```
 
 id is a Bash command that displays the user and group names and IDs.
 
 ```{bash}
+#| eval: true
 last | head
 ```
 
@@ -510,6 +532,7 @@ information. By default, head prints the first ten lines or the first
 ten logins.
 
 ```{bash}
+#| eval: true
 echo {con,pre}{sent,fer}{s,ed}
 ```
 
@@ -517,12 +540,14 @@ This command prints all words matching a combination of con or pre, sent
 or fer, and s or ed.
 
 ```{bash}
+#| eval: true
 time sleep 5
 ```
 
 This command puts the console to sleep for 5 seconds.
 
 ```{bash}
+#| eval: true
 history | tail
 ```
 
