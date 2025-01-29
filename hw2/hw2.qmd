@@ -174,6 +174,7 @@ Try to ingest only columns `subject_id`, `itemid`, `charttime`, and `valuenum` i
 **Solution:**
 
 ```{R}
+#| eval: false
 column_subset <- c("subject_id", "itemid", "charttime", "valuenum")
 system.time(read_csv("~/mimic/hosp/labevents.csv.gz", 
                      col_select = column_subset))
@@ -211,6 +212,9 @@ zcat < ~/mimic/hosp/labevents.csv.gz |
 awk -F ',' 'NR == 1 || $5 ~ /50912|50971|50983|50902|50882|51221|51301|50931/ \
 {print $2 "," $5 "," $7 "," $10}' |  gzip > ~/labevents_filtered.csv.gz
 
+```
+
+```{bash}
 echo 'The first ten lines in labevents_filtered.csv.gz are:'
 zcat < ~/labevents_filtered.csv.gz | head -n 10
 
@@ -271,6 +275,8 @@ head(df, 10)
 
 It takes \~3 minutes for the ingestion + selecting + filtering of labevents.csv
 
+Apache Arrow is a software development platform built for high-performance applications involved in transporting and processing large data sets. Its in-memory columnar format holds language-independent specifications to structure table-like datasetsets. Apache Arrow has libraries implemented in various languages, including C, C++, Java, MATLAB, Python, R, and Julia.
+
 ### Q2.5 Compress `labevents.csv` to Parquet format and ingest/select/filter
 
 <p align="center">
@@ -312,6 +318,8 @@ head(df, 10)
 
 Ingesting, selecting, and filtering the Parquet file took \~8.5 seconds. The Parquet file is \~2.5 GB.
 
+Optimized to handle flat columnar storage data formats, the Parquet open-source file format is very compatible with large-volume, complex data. Able to handle many encoding types, the Parquet file format is also known for its exemplary data compression ability. Using Google's record shredding, Parquet files can perform fast queries that select specific columns without the need to read the entire data set and perform efficient column-wise compression.
+
 ### Q2.6 DuckDB
 
 <p align="center">
@@ -350,7 +358,7 @@ head(df_duckdb, 10)
 
 **Solution:** In total, it takes \~0.3 seconds to ingest the Parquet file and an extra \~6 seconds to convert, select, and filter the duckdb file. In total, the whole process took \~6.3 seconds.
 
-DuckDB is an database system that is portable, analytical, in-process, and open source. Unlike other database solutions, DuckDB uses a rich SQL dialect to read and write file in many supported formats, perform lightning fast queries
+DuckDB is a portable, analytical, in-process, and open-source database system. DuckDB uses a rich SQL dialect to read and write files in many supported formats and perform lightning-fast queries using its columnar engine, which supports parallel execution. Unlike other database systems, DuckDB is easy to install and runs in-process in many different host applications, such as Rstudio.
 
 ## Q3. Ingest and filter `chartevents.csv.gz`
 
