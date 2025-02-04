@@ -271,6 +271,10 @@ df <- arrow::open_dataset("~/mimic/hosp/labevents.csv", format = "csv") %>%
 
 nrow(df)
 head(df, 10)
+
+#Clearing the df variable to save on memory
+rm(list = ls())
+gc()
 ```
 
 It takes \~3 minutes for the ingestion + selecting + filtering of labevents.csv
@@ -295,10 +299,17 @@ Write a few sentences to explain what is the Parquet format. Imagine you want to
 #Writing the Parquet file
 df <- arrow::open_dataset("~/mimic/hosp/labevents.csv", format = "csv")
 arrow::write_dataset(df, path = "~/", format = "parquet")
+#Clearing the df variable to save on memory
+rm(list = ls())
+gc()
 ```
 
 ```{R}
 #Reading the data set
+subset_columns <- c("subject_id", "itemid", "charttime", "valuenum")
+subset_itemid <-c(50912, 50971, 50983, 50902, 
+                   50882, 51221, 51301, 50931)
+
 system.time(
   arrow::open_dataset("~/part-0.parquet") %>%
   select(all_of(subset_columns)) %>%
@@ -314,6 +325,10 @@ df <- arrow::open_dataset("~/part-0.parquet") %>%
 
 nrow(df)
 head(df, 10)
+
+#Clearing the df variable to save on memory
+rm(list = ls())
+gc()
 ```
 
 Ingesting, selecting, and filtering the Parquet file took \~8.5 seconds. The Parquet file is \~2.5 GB.
@@ -335,6 +350,10 @@ Write a few sentences to explain what is DuckDB. Imagine you want to explain it 
 **Solution:**
 
 ```{R}
+subset_columns <- c("subject_id", "itemid", "charttime", "valuenum")
+subset_itemid <-c(50912, 50971, 50983, 50902, 
+                   50882, 51221, 51301, 50931)
+
 system.time(arrow::open_dataset("~/part-0.parquet"))
 
 df <- arrow::open_dataset("~/part-0.parquet")
@@ -354,6 +373,9 @@ df_duckdb <- arrow::to_duckdb(df) %>%
 nrow(df_duckdb)
 head(df_duckdb, 10)
 
+#Clearing the df variable to save on memory
+rm(list = ls())
+gc()
 ```
 
 **Solution:** In total, it takes \~0.3 seconds to ingest the Parquet file and an extra \~6 seconds to convert, select, and filter the duckdb file. In total, the whole process took \~6.3 seconds.
@@ -387,23 +409,30 @@ Document the steps and show code. Display the number of rows and the first 10 ro
 
 **Solution:**
 
-I first use Bash to create a filtered gzip, since out of all the methods in Q2, this method takes up the least amount of disk space and memory, and I am low on both on my computer.
-
-```{bash}
-#Itemid is the 7th column of chartevents.csv.gz
-#We use awk to filter out rows that do not contain such columns.
-
-zcat < ~/mimic/icu/chartevents.csv.gz | 
-awk -F ',' 'NR == 1 || $7 ~ /220045|220181|220179|223761|220210/ \
-{print $0}' |  gzip > ~/chartevents_filtered.csv.gz
+```{R}
+#Writing the Parquet file
+df <- arrow::open_dataset("~/mimic/icu/chartevents.csv.gz", format = "csv")
+arrow::write_dataset(df, path = "~/", format = "parquet")
+#Clearing the df variable to save on memory
+rm(list = ls())
+gc()
 ```
 
-We then use R to load in the data set and display the first ten lines and count the total number of lines. We use `read_csv`.
-
 ```{R}
-df <- read_csv("~/chartevents_filtered.csv.gz")
-nrow(df)
-head(df, 10)
+subset_columns <- c("subject_id", "itemid", "charttime", "valuenum")
+subset_itemid <-c(220045, 220181, 220179, 223761, 220210)
+df <- arrow::open_dataset("~/part-0.parquet")
+df_duckdb <- arrow::to_duckdb(df) %>%
+  select(all_of(subset_columns)) %>%
+  filter(itemid %in% subset_itemid) %>%
+  collect()
+
+nrow(df_duckdb)
+head(df_duckdb, 10)
+
+#Clearing variables to save on ram
+rm(list = ls())
+gc()
 ```
 
 The number of rows is 30195426.
