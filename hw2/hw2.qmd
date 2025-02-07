@@ -3,6 +3,7 @@ title: "Biostat 203B Homework 2"
 subtitle: Due Feb 7, 2025 @ 11:59PM
 author: "Khoa Vu UID: 705600710"
 format:
+  pdf: default
   html:
     theme: cosmo
     embed-resources: true
@@ -64,6 +65,7 @@ Which function is fastest? Is there difference in the (default) parsed data type
 Testing the speed of `read.csv`:
 
 ```{R}
+#| eval: true
 system.time(read.csv("~/mimic/hosp/admissions.csv.gz"))
 pryr::object_size(read.csv("~/mimic/hosp/admissions.csv.gz"))
 ```
@@ -71,6 +73,7 @@ pryr::object_size(read.csv("~/mimic/hosp/admissions.csv.gz"))
 Testing the speed of `read_csv`:
 
 ```{R}
+#| eval: true
 system.time(read_csv("~/mimic/hosp/admissions.csv.gz"))
 pryr::object_size(read_csv("~/mimic/hosp/admissions.csv.gz"))
 ```
@@ -78,6 +81,7 @@ pryr::object_size(read_csv("~/mimic/hosp/admissions.csv.gz"))
 Testing the speed of `fread`:
 
 ```{R}
+#| eval: true
 system.time(fread("~/mimic/hosp/admissions.csv.gz"))
 pryr::object_size(fread("~/mimic/hosp/admissions.csv.gz"))
 ```
@@ -91,7 +95,9 @@ Re-ingest `admissions.csv.gz` by indicating appropriate column data types in `re
 **Solution:**
 
 ```{R}
-#Note: we can use a compact string representation where each character represents one column:
+#| eval: true
+#Note: we can use a compact string representation where each character 
+#represents one column:
 #c = character
 #i = integer
 #n = number
@@ -127,7 +133,9 @@ pryr::object_size(read_csv("~/mimic/hosp/admissions.csv.gz",
                      col_types = colum_data_types))
 ```
 
-When indicating the appropriate column types, the runtime increases to \~1.9 seconds, and the memory used increases to \~68 MB. \## Q2. Ingest big data files
+When indicating the appropriate column types, the runtime increases to \~1.9 seconds, and the memory used increases to \~68 MB.
+
+## Q2. Ingest big data files
 
 <p align="center">
 
@@ -138,12 +146,14 @@ When indicating the appropriate column types, the runtime increases to \~1.9 sec
 Let us focus on a bigger file, `labevents.csv.gz`, which is about 130x bigger than `admissions.csv.gz`.
 
 ```{bash}
+#| eval: true
 ls -l ~/mimic/hosp/labevents.csv.gz
 ```
 
 Display the first 10 lines of this file.
 
 ```{bash}
+#| eval: true
 zcat < ~/mimic/hosp/labevents.csv.gz | head -10
 ```
 
@@ -165,7 +175,7 @@ system.time(read_csv("~/mimic/hosp/labevents.csv.gz"))
 pryr::object_size(read_csv("~/mimic/hosp/labevents.csv.gz"))
 ```
 
-When trying to use `read_csv` to ingest `labevents.csv.gz`, my computer crashes.
+When trying to use `read_csv` to ingest `labevents.csv.gz`, my computer crashes. This is most likely due to a lack of processing power, available memory, etc. on my laptop.
 
 ### Q2.2 Ingest selected columns of `labevents.csv.gz` by `read_csv`
 
@@ -204,10 +214,14 @@ Display the first 10 lines of the new file `labevents_filtered.csv.gz`. How many
 #| eval: false
 
 #We use awk to select our columns of interest.
-#`subject_id`, `itemid`, `charttime`, `valuenum` are columns 2, 5, 7, and 10 respectively
-#and to select values of the following lab items: creatinine (50912), potassium (50971), sodium (50983), chloride (50902), bicarbonate (50882), hematocrit (51221), white blood cell count (51301), and glucose (50931) using itemid, column 5.
+#`subject_id`, `itemid`, `charttime`, `valuenum` are columns 2, 5, 7, and 10 
+#respectively and to select values of the following lab items: 
+#creatinine (50912), potassium (50971), sodium (50983), chloride (50902), 
+#bicarbonate (50882), hematocrit (51221), white blood cell count (51301), 
+#and glucose (50931) using itemid, column 5.
 
-#Note: We use NR == 1 to skip the logic in the first line, since we want to keep the headers to read later on.
+#Note: We use NR == 1 to skip the logic in the first line, since we want to 
+#keep the headers to read later on.
 zcat < ~/mimic/hosp/labevents.csv.gz | 
 awk -F ',' 'NR == 1 || $5 ~ /50912|50971|50983|50902|50882|51221|51301|50931/ \
 {print $2 "," $5 "," $7 "," $10}' |  gzip > ~/labevents_filtered.csv.gz
@@ -215,6 +229,7 @@ awk -F ',' 'NR == 1 || $5 ~ /50912|50971|50983|50902|50882|51221|51301|50931/ \
 ```
 
 ```{bash}
+#| eval: true
 echo 'The first ten lines in labevents_filtered.csv.gz are:'
 zcat < ~/labevents_filtered.csv.gz | head -n 10
 
@@ -224,6 +239,7 @@ zcat < ~/labevents_filtered.csv.gz | tail -n +2 |wc -l
 ```
 
 ```{R}
+#| eval: true
 system.time(fread("~/labevents_filtered.csv.gz"))
 pryr::object_size(fread("~/labevents_filtered.csv.gz"))
 ```
@@ -253,6 +269,7 @@ gzip -dk ~/mimic/hosp/labevents.csv.gz
 ```
 
 ```{R}
+#| eval: true
 subset_columns <- c("subject_id", "itemid", "charttime", "valuenum")
 subset_itemid <-c(50912, 50971, 50983, 50902, 
                    50882, 51221, 51301, 50931)
@@ -261,12 +278,14 @@ system.time(
   arrow::open_dataset("~/mimic/hosp/labevents.csv", format = "csv") %>%
   select(all_of(subset_columns)) %>%
   filter(itemid %in% subset_itemid) %>%
+  arrange(subject_id, charttime, itemid) %>%
   collect()
   )
 
 df <- arrow::open_dataset("~/mimic/hosp/labevents.csv", format = "csv") %>%
   select(all_of(subset_columns)) %>%
   filter(itemid %in% subset_itemid) %>%
+  arrange(subject_id, charttime, itemid) %>%
   collect()
 
 nrow(df)
@@ -277,7 +296,7 @@ rm(list = ls())
 gc()
 ```
 
-It takes \~3 minutes for the ingestion + selecting + filtering of labevents.csv
+It takes \~2 minutes for the ingestion + selecting + filtering + sorting of labevents.csv
 
 Apache Arrow is a software development platform built for high-performance applications involved in transporting and processing large data sets. Its in-memory columnar format holds language-independent specifications to structure table-like datasetsets. Apache Arrow has libraries implemented in various languages, including C, C++, Java, MATLAB, Python, R, and Julia.
 
@@ -296,31 +315,35 @@ Write a few sentences to explain what is the Parquet format. Imagine you want to
 **Solution:**
 
 ```{R}
+#| eval: true
 #Writing the Parquet file
 df <- arrow::open_dataset("~/mimic/hosp/labevents.csv", format = "csv")
-arrow::write_dataset(df, path = "~/", format = "parquet")
+arrow::write_dataset(df, path = "~/labevents_pq", format = "parquet")
 #Clearing the df variable to save on memory
 rm(list = ls())
 gc()
 ```
 
 ```{R}
+#| eval: true
 #Reading the data set
 subset_columns <- c("subject_id", "itemid", "charttime", "valuenum")
 subset_itemid <-c(50912, 50971, 50983, 50902, 
                    50882, 51221, 51301, 50931)
 
 system.time(
-  arrow::open_dataset("~/part-0.parquet") %>%
+  arrow::open_dataset("~/labevents_pq/part-0.parquet") %>%
   select(all_of(subset_columns)) %>%
   filter(itemid %in% subset_itemid) %>%
+  arrange(subject_id, charttime, itemid) %>%
   collect()
   )
 
 
-df <- arrow::open_dataset("~/part-0.parquet") %>%
+df <- arrow::open_dataset("~/labevents_pq/part-0.parquet") %>%
   select(all_of(subset_columns)) %>%
   filter(itemid %in% subset_itemid) %>%
+  arrange(subject_id, charttime, itemid) %>%
   collect()
 
 nrow(df)
@@ -331,7 +354,7 @@ rm(list = ls())
 gc()
 ```
 
-Ingesting, selecting, and filtering the Parquet file took \~8.5 seconds. The Parquet file is \~2.5 GB.
+Ingesting, selecting, filtering, and sorting the Parquet file took \~17 seconds. The Parquet file is \~2.5 GB.
 
 Optimized to handle flat columnar storage data formats, the Parquet open-source file format is very compatible with large-volume, complex data. Able to handle many encoding types, the Parquet file format is also known for its exemplary data compression ability. Using Google's record shredding, Parquet files can perform fast queries that select specific columns without the need to read the entire data set and perform efficient column-wise compression.
 
@@ -350,24 +373,27 @@ Write a few sentences to explain what is DuckDB. Imagine you want to explain it 
 **Solution:**
 
 ```{R}
+#| eval: true
 subset_columns <- c("subject_id", "itemid", "charttime", "valuenum")
 subset_itemid <-c(50912, 50971, 50983, 50902, 
                    50882, 51221, 51301, 50931)
 
-system.time(arrow::open_dataset("~/part-0.parquet"))
+system.time(arrow::open_dataset("~/labevents_pq/part-0.parquet"))
 
-df <- arrow::open_dataset("~/part-0.parquet")
+df <- arrow::open_dataset("~/labevents_pq/part-0.parquet")
 
 system.time(  
   arrow::to_duckdb(df) %>%
   select(all_of(subset_columns)) %>%
   filter(itemid %in% subset_itemid) %>%
+  arrange(subject_id, charttime, itemid) %>%
   collect()
 )
 
 df_duckdb <- arrow::to_duckdb(df) %>%
   select(all_of(subset_columns)) %>%
   filter(itemid %in% subset_itemid) %>%
+  arrange(subject_id, charttime, itemid) %>%
   collect()
 
 nrow(df_duckdb)
@@ -378,7 +404,7 @@ rm(list = ls())
 gc()
 ```
 
-**Solution:** In total, it takes \~0.3 seconds to ingest the Parquet file and an extra \~6 seconds to convert, select, and filter the duckdb file. In total, the whole process took \~6.3 seconds.
+**Solution:** In total, it takes \~0.3 seconds to ingest the Parquet file and an extra \~1 minute to convert, select, filter, and sort the DuckDB file. In total, the whole process took \~6.3 seconds.
 
 DuckDB is a portable, analytical, in-process, and open-source database system. DuckDB uses a rich SQL dialect to read and write files in many supported formats and perform lightning-fast queries using its columnar engine, which supports parallel execution. Unlike other database systems, DuckDB is easy to install and runs in-process in many different host applications, such as Rstudio.
 
@@ -387,6 +413,7 @@ DuckDB is a portable, analytical, in-process, and open-source database system. D
 [`chartevents.csv.gz`](https://mimic.mit.edu/docs/iv/modules/icu/chartevents/) contains all the charted data available for a patient. During their ICU stay, the primary repository of a patient’s information is their electronic chart. The `itemid` variable indicates a single measurement type in the database. The `value` variable is the value measured for `itemid`. The first 10 lines of `chartevents.csv.gz` are
 
 ```{bash}
+#| eval: true
 zcat < ~/mimic/icu/chartevents.csv.gz | head -10
 ```
 
@@ -409,22 +436,27 @@ Document the steps and show code. Display the number of rows and the first 10 ro
 
 **Solution:**
 
+We use the methodology of Q2.6, converting `chartevents.csv.gz` first to a parquet file and then a DuckDB table before ingesting, filtering, and sorting.
+
 ```{R}
+#| eval: true
 #Writing the Parquet file
 df <- arrow::open_dataset("~/mimic/icu/chartevents.csv.gz", format = "csv")
-arrow::write_dataset(df, path = "~/", format = "parquet")
+arrow::write_dataset(df, path = "~/chartevents_pq", format = "parquet")
 #Clearing the df variable to save on memory
 rm(list = ls())
 gc()
 ```
 
 ```{R}
+#| eval: true
 subset_columns <- c("subject_id", "itemid", "charttime", "valuenum")
 subset_itemid <-c(220045, 220181, 220179, 223761, 220210)
-df <- arrow::open_dataset("~/part-0.parquet")
+df <- arrow::open_dataset("~/chartevents_pq/part-0.parquet")
 df_duckdb <- arrow::to_duckdb(df) %>%
   select(all_of(subset_columns)) %>%
   filter(itemid %in% subset_itemid) %>%
+  arrange(subject_id, charttime, itemid) %>%
   collect()
 
 nrow(df_duckdb)
