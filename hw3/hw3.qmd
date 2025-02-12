@@ -53,13 +53,9 @@ Hint: We need to pull information from data files `patients.csv.gz`, `admissions
 
 **Solution:**
 
-```{bash}
-zcat < ~/mimic/hosp/diagnoses_icd.csv.gz | head -n 2
-```
-
 ```{r}
 #Setting the subject ID
-#ID <- (10001217) #This is the 
+#ID <- (10001217) #This is the exmaple subject ID
 ID <- (10063848)
 
 #Reading in labevents_pg, we only want the subject_id and charttime
@@ -79,8 +75,8 @@ procedures_icd <- read_csv("~/mimic/hosp/procedures_icd.csv.gz") %>%
    filter(subject_id %in% ID)
 d_icd_procedures <- read_csv("~/mimic/hosp/d_icd_procedures.csv.gz") 
 
-#Joining the two data frames by icd_code to get the procedure name
-#We only want the chartdate and long_title 
+#Left Joining procedures_icd and d_icd_procedures by icd_code to get 
+#the procedure name. We only want the chartdate and long_title. 
 joined_procedures <- left_join(procedures_icd, d_icd_procedures, 
                                by = "icd_code") %>% 
   select(all_of(c("chartdate", "long_title"))) %>%
@@ -93,6 +89,10 @@ transfers <- read_csv("~/mimic/hosp/transfers.csv.gz") %>%
   #Filtering out values where care units is UNKNOWN
   filter(careunit != "UNKNOWN") %>% 
   select(all_of(c("subject_id", "intime", "outtime", "careunit")))
+#Converting time to UTC and not PDT
+transfers$intime <- as.POSIXct(transfers$intime, tz="UTC")
+transfers$outtime <- as.POSIXct(transfers$outtime, tz="UTC")
+
 
 #Filtering transfers by ICU/CCU
 transfers_ICU_CCU <- transfers %>% filter(grepl('ICU|CCU', careunit)) %>%
@@ -125,8 +125,8 @@ subject_age <- unique(patients$anchor_age)
 subject_title <- paste0("Patient ", ID, ", ", subject_gender, ", ", subject_age,
   ", years old, ", subject_race)
 
-#Reading in diagnoses.csv.gz and d_icd_diagnoses.csv.gz to get 
-#top three diagnoses for the subtitle
+#Reading in and left joining diagnoses_icd.csv.gz and d_icd_diagnoses.csv.gz 
+#to get the top three diagnoses for the subtitle
 
 diagnoses_icd <- read_csv("~/mimic/hosp/diagnoses_icd.csv.gz") %>% 
   filter(subject_id %in% ID) %>% head(3)
@@ -163,8 +163,9 @@ ggplot() +
              aes(x = Calender_Time, y = type, shape = long_title), size = 5) +
   theme(
     axis.title.y = element_blank(),
-    legend.position="bottom"
+    legend.position = "bottom",
   ) + 
+  scale_y_discrete(limits = c("Procedure", "Lab", "ADT")) +
   xlab("Calender Time") + 
   labs(title = subject_title,
        subtitle = subject_subtitle,
@@ -180,6 +181,66 @@ ICU stays are a subset of ADT history. This figure shows the vitals of the patie
 ![](10001217_icu.png)
 
 Do a similar visualization for the patient `10063848`.
+
+**Solution:**
+
+```{bash}
+zcat < ~/mimic/icu/icustays.csv.gz | head -n 5 
+```
+
+```{r}
+#Setting the subject ID
+#ID <- (10001217) #This is the exmaple subject ID
+ID <- (10063848)
+
+#Reading in icustays.csv.gz
+icustays <- read_csv("~/mimic/icu/icustays.csv.gz") %>% 
+   filter(subject_id %in% ID)
+
+#Reading in chartevents.csv.gz, using the Parquet generated from HW2
+#We create a symoblic link to the Parquet file in chartevents_pq
+#We take the measurements and columns we need: 
+#heart rate (220045), mean non-invasive blood pressure (220181), 
+#systolic non-invasive blood pressure (220179), body temperature in 
+#Fahrenheit (223761), and respiratory rate (220210)
+
+subset_itemid <-c(220045, 220181, 220179, 223761, 220210)
+
+chartevents <- arrow::open_dataset("~/chartevents_pq") %>% 
+  #Filering based on subject ID
+  filter(subject_id %in% ID) %>%
+  #Subset based on needed measurements
+  filter(itemid %in% subset_itemid) %>%
+  collect()
+#Converting time to UTC and not PDT
+chartevents$charttime <- as.POSIXct(chartevents$charttime, tz="UTC")
+
+
+#We left join chartevents and icustays by stay_id to differentiate the unique
+#icu stays for each measurement
+joined_icu_chart <- left_join(chartevents, icustays, by = "stay_id") 
+#We get the number of unique stay_id and their values
+stay_ids <- unique(joined_icu_chart$stay_id)
+
+#We rename the item_id with their abbreviations:
+#heart rate --> HR, mean non-invasive blood pressure --> NBPd, 
+#systolic non-invasive blood pressure --> NBPs, body temperature in 
+#Fahrenheit --> Temperature, and respiratory rate --> RR
+joined_icu_chart <- joined_icu_chart %>%
+  mutate(abbr = recode(itemid, "220045" = 'HR', "220181" = 'NBPd',
+  "220179" = 'NBPs', "223761" = "Temperature", "220210" = "RR"))
+
+ggplot()+
+  geom_point(joined_icu_chart, mapping = aes(x = charttime, y = value, color = abbr)) +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+  facet_grid(abbr~stay_id, scales="free", space="free_x") +
+  theme(
+    axis.title.y = element_blank(),
+    axis.title.x = element_blank()
+  )
+  
+
+```
 
 ## Q2. ICU stays
 
