@@ -54,48 +54,107 @@ Hint: We need to pull information from data files `patients.csv.gz`, `admissions
 **Solution:**
 
 ```{bash}
-zcat < ~/mimic/hosp/admissions.csv.gz | head -n 5
+zcat < ~/mimic/hosp/diagnoses_icd.csv.gz | head -n 2
 ```
 
 ```{r}
 #Setting the subject ID
+#ID <- (10001217) #This is the 
 ID <- (10063848)
 
 #Reading in labevents_pg, we only want the subject_id and charttime
 labevents <- arrow::open_dataset("~/labevents_pq") %>% 
-   filter(subject_id %in% ID) %>%
-   select(all_of(c("subject_id", "charttime"))) %>%
-   rename("Calender_Time" = charttime) %>%
-   mutate(type = "Lab") %>%
-   collect() 
-head(labevents)
+  #Filering based on subject ID
+  filter(subject_id %in% ID) %>%
+  #Selecting only on columns of interest
+  select(all_of(c("subject_id", "charttime"))) %>%
+  #Renaming charttime to Calender_Time
+  rename("Calender_Time" = charttime) %>%
+  collect() 
+#Converting time to UTC and not PDT
+labevents$Calender_Time <- as.POSIXct(labevents$Calender_Time, tz="UTC")
 
 #Reading in procedures_icd.csv.gz and d_icd_procedures.csv.gz
 procedures_icd <- read_csv("~/mimic/hosp/procedures_icd.csv.gz") %>% 
    filter(subject_id %in% ID)
-d_procedures_icd <- read_csv("~/mimic/hosp/d_icd_procedures.csv.gz") 
+d_icd_procedures <- read_csv("~/mimic/hosp/d_icd_procedures.csv.gz") 
 
 #Joining the two data frames by icd_code to get the procedure name
 #We only want the chartdate and long_title 
-joined_procedures <- left_join(procedures_icd, d_procedures_icd, 
+joined_procedures <- left_join(procedures_icd, d_icd_procedures, 
                                by = "icd_code") %>% 
   select(all_of(c("chartdate", "long_title"))) %>%
   rename("Calender_Time" = chartdate) %>%
   mutate(type = "Lab") 
 
-#Reading in admissions
-admissions <-
+#Reading in transfers.csv.gz
+transfers <- read_csv("~/mimic/hosp/transfers.csv.gz") %>% 
+  filter(subject_id %in% ID) %>% 
+  #Filtering out values where care units is UNKNOWN
+  filter(careunit != "UNKNOWN") %>% 
+  select(all_of(c("subject_id", "intime", "outtime", "careunit")))
+
+#Filtering transfers by ICU/CCU
+transfers_ICU_CCU <- transfers %>% filter(grepl('ICU|CCU', careunit)) %>%
+  mutate(ICU_CCU = "Yes")
+transfers_Not_ICU_CCU <- transfers %>% filter(!(grepl('ICU|CCU', careunit))) %>%
+  mutate(ICU_CCU = "No")
 
 #Joining resulting dataframes into 1
 res_df <- bind_rows(
   labevents %>% mutate(type = "Lab"),
-  joined_procedures %>% mutate(type = "Procedure")
+  joined_procedures %>% mutate(type = "Procedure"),
+  transfers_ICU_CCU %>% mutate(type = "ADT"),
+  transfers_Not_ICU_CCU %>% mutate(type = "ADT"),
 )
 
+#Ordering the types alphabetically using factors 
+res_df$type <- factor(res_df$type, levels=c("Procedure", "Lab", "ADT"))
+
+#Reading in admissions.csv.gz to get race information
+admissions <- read_csv("~/mimic/hosp/admissions.csv.gz") %>% 
+  filter(subject_id %in% ID) 
+subject_race <- tolower(unique(admissions$race))
+
+#Reading in patients.csv.gz to get gender and age information
+patients <- read_csv("~/mimic/hosp/patients.csv.gz") %>% 
+  filter(subject_id %in% ID) 
+subject_gender <- unique(patients$gender)
+subject_age <- unique(patients$anchor_age)
+
+subject_title <- paste0("Patient ", ID, ", ", subject_gender, ", ", subject_age,
+  ", years old, ", subject_race)
+
+#Reading in diagnoses.csv.gz and d_icd_diagnoses.csv.gz to get 
+#top three diagnoses for the subtitle
+
+diagnoses_icd <- read_csv("~/mimic/hosp/diagnoses_icd.csv.gz") %>% 
+  filter(subject_id %in% ID) %>% head(3)
+d_icd_diagnoses <- read_csv("~/mimic/hosp/d_icd_diagnoses.csv.gz") 
+joined_diagnoses <- left_join(diagnoses_icd, d_icd_diagnoses, 
+  by = "icd_code") 
+top_three_diagnoses <- joined_diagnoses$long_title
+subject_subtitle <- paste0(top_three_diagnoses[1], "\n", 
+                           top_three_diagnoses[2], "\n", 
+                           top_three_diagnoses[3])
+
 #We wrap the text for our legend
-res_df <- res_df %>% mutate(long_title = str_wrap(long_title, 10))
+res_df <- res_df %>% 
+  mutate(long_title = str_wrap(long_title, 10)) %>% 
+  mutate(careunit = str_wrap(careunit, 10))
+
+#Define line segment size
+segment_size = 2
 
 ggplot() + 
+  #Plotting the ADT Data (Not ICU/CCU)
+  geom_segment(data = res_df %>% filter((type == "ADT") & (ICU_CCU == "No")), 
+             aes(x = intime, y = type, xend = outtime, yend = type, 
+                 color = careunit), linewidth = segment_size) +
+  #Plotting the ADT Data (ICU/CCU)
+  geom_segment(data = res_df %>% filter((type == "ADT") & (ICU_CCU == "Yes")), 
+             aes(x = intime, y = type, xend = outtime, yend = type, 
+                 color = careunit), linewidth = segment_size*2) +
   #Plotting the Lab data
   geom_point(data = res_df %>% filter(type == "Lab"), 
              aes(x = Calender_Time, y = type), shape = 3, size = 5) +
@@ -105,7 +164,12 @@ ggplot() +
   theme(
     axis.title.y = element_blank(),
     legend.position="bottom"
-  ) + xlab("Calender Time") + labs(shape = "Procedure")
+  ) + 
+  xlab("Calender Time") + 
+  labs(title = subject_title,
+       subtitle = subject_subtitle,
+       color = "Care Unit", 
+       shape = "Procedure") 
 
 ```
 
