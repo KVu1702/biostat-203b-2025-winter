@@ -108,9 +108,6 @@ res_df <- bind_rows(
   transfers_Not_ICU_CCU %>% mutate(type = "ADT"),
 )
 
-#Ordering the types alphabetically using factors 
-res_df$type <- factor(res_df$type, levels=c("Procedure", "Lab", "ADT"))
-
 #Reading in admissions.csv.gz to get race information
 admissions <- read_csv("~/mimic/hosp/admissions.csv.gz") %>% 
   filter(subject_id %in% ID) 
@@ -140,8 +137,8 @@ subject_subtitle <- paste0(top_three_diagnoses[1], "\n",
 
 #We wrap the text for our legend
 res_df <- res_df %>% 
-  mutate(long_title = str_wrap(long_title, 10)) %>% 
-  mutate(careunit = str_wrap(careunit, 10))
+  mutate(long_title = str_wrap(long_title, 15)) %>% 
+  mutate(careunit = str_wrap(careunit, 15))
 
 #Define line segment size
 segment_size = 2
@@ -154,7 +151,7 @@ ggplot() +
   #Plotting the ADT Data (ICU/CCU)
   geom_segment(data = res_df %>% filter((type == "ADT") & (ICU_CCU == "Yes")), 
              aes(x = intime, y = type, xend = outtime, yend = type, 
-                 color = careunit), linewidth = segment_size*2) +
+                 color = careunit), linewidth = segment_size*3) +
   #Plotting the Lab data
   geom_point(data = res_df %>% filter(type == "Lab"), 
              aes(x = Calender_Time, y = type), shape = 3, size = 5) +
@@ -164,13 +161,16 @@ ggplot() +
   theme(
     axis.title.y = element_blank(),
     legend.position = "bottom",
+    legend.box = "vertical"
   ) + 
-  scale_y_discrete(limits = c("Procedure", "Lab", "ADT")) +
+  scale_y_discrete(limits = rev) +
   xlab("Calender Time") + 
   labs(title = subject_title,
        subtitle = subject_subtitle,
        color = "Care Unit", 
-       shape = "Procedure") 
+       shape = "Procedure") +
+  guides(color = guide_legend(order=1),
+         shape = guide_legend(order=2))
 
 ```
 
@@ -196,11 +196,11 @@ icustays <- read_csv("~/mimic/icu/icustays.csv.gz") %>%
 #Reading in chartevents.csv.gz, using the Parquet generated from HW2
 #We create a symoblic link to the Parquet file in chartevents_pq
 #We take the measurements and columns we need: 
-#heart rate (220045), mean non-invasive blood pressure (220181), 
+#heart rate (220045), diastolic non-invasive blood pressure (220180), 
 #systolic non-invasive blood pressure (220179), body temperature in 
 #Fahrenheit (223761), and respiratory rate (220210)
 
-subset_itemid <-c(220045, 220181, 220179, 223761, 220210)
+subset_itemid <-c(220045, 220180, 220179, 223761, 220210)
 
 chartevents <- arrow::open_dataset("~/chartevents_pq") %>% 
   #Filering based on subject ID
@@ -218,24 +218,22 @@ chartevents$charttime <- as.POSIXct(chartevents$charttime, tz="UTC")
 #icu stays for each measurement
 joined_icu_chart <- left_join(chartevents, icustays, by = "stay_id") 
 
-#We rename the item_id with their abbreviations:
-#heart rate --> HR, mean non-invasive blood pressure --> NBPd, 
-#systolic non-invasive blood pressure --> NBPs, body temperature in 
-#Fahrenheit --> Temperature, and respiratory rate --> RR
-joined_icu_chart <- joined_icu_chart %>%
-  mutate(abbr = recode(itemid, "220045" = 'HR', "220181" = 'NBPd',
-  "220179" = 'NBPs', "223761" = "Temperature", "220210" = "RR"))
+#We rename the item_id with their abbreviations by utilizing d_items.csv.gz
+d_items <- read_csv("~/mimic/icu/d_items.csv.gz") 
+#We left join with our chart events on itemid
+joined_icu_chart_id <- left_join(joined_icu_chart, d_items, by = "itemid") 
+
 
 #Creating our title
 subject_title <- paste0("Patient ", ID, ", ICU stays - Vitals")
 
-#Note, our y is value and not value_num, we want the values to be a double
+#Note, our y is value and not valuenum, we want the values to be a double
 #and not a string
-ggplot(joined_icu_chart, mapping = 
-  aes(x = charttime, y = valuenum, color = abbr, group = abbr))+
+ggplot(joined_icu_chart_id, mapping = aes(x = charttime, y = valuenum, 
+  color = abbreviation, group = abbreviation)) +
   geom_point() +
   geom_line() +
-  facet_grid(abbr~stay_id, scales="free", space="free_x") +
+  facet_grid(abbreviation~stay_id, scales="free", space="free_x") +
   scale_x_datetime(guide = guide_axis(n.dodge = 2)) + 
   theme(
     axis.title.y = element_blank(),
@@ -258,9 +256,46 @@ zcat < ~/mimic/icu/icustays.csv.gz | head
 
 Import `icustays.csv.gz` as a tibble `icustays_tble`.
 
+**Solution:**
+
+```{r}
+icustays_tble <- read_csv("~/mimic/icu/icustays.csv.gz")
+```
+
 ### Q2.2 Summary and visualization
 
 How many unique `subject_id`? Can a `subject_id` have multiple ICU stays? Summarize the number of ICU stays per `subject_id` by graphs.
+
+**Solution:**
+
+```{r}
+#Printing number of ICU stays
+nrow(icustays_tble)
+
+#Printing number of unqiue subject_id
+length(unique(icustays_tble$subject_id))
+
+num_ICU_stays_per_subject_id <- icustays_tble %>% 
+  #Group by subject_id
+  group_by(subject_id) %>%
+  #Count number of stays per subject_id
+  summarise(n_stays = n()) %>%
+  #Group by number of stays
+  group_by(n_stays) %>%
+  #Count the number of times for each number of stays
+  summarise(freq_n_stays = n())
+
+ggplot(num_ICU_stays_per_subject_id, aes(x = n_stays, 
+  y = freq_n_stays)) +
+  geom_bar(stat = 'identity') +
+  xlab("Number of Stays") + 
+  ylab("Frequency") + 
+  theme(legend.position = "none") +
+  labs(title = "Frequency of ICU Stays For Each Subject ID") 
+
+```
+
+The number of unique `subject_id` is 65366 while the total number of ICU stays is 94458, which means that there are some subjects who have multiple ICU stays.
 
 ## Q3. `admissions` data
 
@@ -274,6 +309,12 @@ zcat < ~/mimic/hosp/admissions.csv.gz | head
 
 Import `admissions.csv.gz` as a tibble `admissions_tble`.
 
+**Solution:**
+
+```{r}
+admissions_tble <- read_csv("~/mimic/hosp/admissions.csv.gz")
+```
+
 ### Q3.2 Summary and visualization
 
 Summarize the following information by graphics and explain any patterns you see.
@@ -282,6 +323,85 @@ Summarize the following information by graphics and explain any patterns you see
 -   admission hour (anything unusual?)\
 -   admission minute (anything unusual?)\
 -   length of hospital stay (from admission to discharge) (anything unusual?)
+
+**Solution:**
+
+```{r}
+
+#Number of admissions per patient
+num_admissions_per_patient <- admissions_tble %>% 
+  #Group by subject_id
+  group_by(subject_id) %>%
+  #Count number of admissions per patient
+  summarise(n_admissions = n()) %>%
+  #Group by number of admissions
+  group_by(n_admissions) %>%
+  #Count the number of times for each number of stays
+  summarise(freq_n_admissions = n())
+
+ggplot(num_admissions_per_patient, aes(x = n_admissions, 
+  y = freq_n_admissions)) +
+  geom_bar(stat = 'identity') +
+  xlab("Number of Admissions") + 
+  ylab("Frequency") + 
+  theme(legend.position = "none") +
+  labs(title = "Frequency of Admissions Per Patient") 
+
+#Admission hour
+
+#Adding an hour column to admissions_tble
+  
+admissions_tble$admission_hour <- hour(admissions_tble$admittime)
+
+n_hour_of_admission <- admissions_tble %>% 
+  #Group by admission hour
+  group_by(admission_hour) %>%
+  #Count number of admissions by hour
+  summarise(n_admissions_hour = n()) 
+
+ggplot(n_hour_of_admission, aes(x = admission_hour, 
+  y = n_admissions_hour)) +
+  geom_bar(stat = 'identity') +
+  xlab("Hour of Admissions") + 
+  ylab("Frequency") + 
+  theme(legend.position = "none") +
+  labs(title = "Frequency of Admissions By Hour") 
+
+#Admission Minute
+
+#Adding a minute column to admissions_tble
+  
+admissions_tble$admission_minute <- minute(admissions_tble$admittime)
+
+n_minute_of_admission <- admissions_tble %>% 
+  #Group by admission minute
+  group_by(admission_minute) %>%
+  #Count number of admissions by minute
+  summarise(n_admissions_minute = n()) 
+
+ggplot(n_minute_of_admission, aes(x = admission_minute, 
+  y = n_admissions_minute)) +
+  geom_bar(stat = 'identity') +
+  xlab("Minute of Admissions") + 
+  ylab("Frequency") + 
+  theme(legend.position = "none") +
+  labs(title = "Frequency of Admissions By Minute") 
+
+#Length of Hospital Stay
+
+#Find the duration of the length of stay
+admissions_tble$length_of_stay <- difftime(admissions_tble$dischtime, 
+  admissions_tble$admittime, units="days")
+
+ggplot(admissions_tble, aes(x = length_of_stay)) +
+  geom_histogram() +
+  stat_bin(bins = 30) +
+  xlab("Duration of Stay (Days)") + 
+  ylab("Frequency") + 
+  theme(legend.position = "none") +
+  labs(title = "Frequency of Duration of Stay (Days)") 
+
+```
 
 According to the [MIMIC-IV documentation](https://mimic.mit.edu/docs/iv/about/concepts/#date-shifting),
 
@@ -299,9 +419,50 @@ zcat < ~/mimic/hosp/patients.csv.gz | head
 
 Import `patients.csv.gz` (<https://mimic.mit.edu/docs/iv/modules/hosp/patients/>) as a tibble `patients_tble`.
 
+**Solution:**
+
+```{r}
+patients_tble <- read_csv("~/mimic/hosp/patients.csv.gz")
+```
+
 ### Q4.2 Summary and visualization
 
 Summarize variables `gender` and `anchor_age` by graphics, and explain any patterns you see.
+
+**Solution:**
+
+```{r}
+
+#Summarizing Gender
+n_gender <- patients_tble %>% 
+  #Group by gender
+  group_by(gender) %>%
+  #Count number of each gender
+  summarise(n_gender = n()) 
+
+ggplot(n_gender, aes(x = gender, y = n_gender, fill = gender)) +
+  geom_bar(stat = 'identity') +
+  xlab("Gender") + 
+  ylab("Frequency") + 
+  theme(legend.position = "right") +
+  labs(title = "Frequency of Gender")  
+
+#Summarizing anchor_age
+n_anchor_age <- patients_tble %>% 
+  #Group by anchor_age
+  group_by(anchor_age) %>%
+  #Count number of anchor_age
+  summarise(n_anchor_age = n()) 
+
+ggplot(n_anchor_age, aes(x = anchor_age, y = n_anchor_age)) +
+  geom_bar(stat = 'identity') +
+  xlab("anchor_age") + 
+  ylab("Frequency") + 
+  theme(legend.position = "none") +
+  labs(title = "Frequency of Anchor Ages") 
+
+```
+
 
 ## Q5. Lab results
 
@@ -323,6 +484,54 @@ We are interested in the lab measurements of creatinine (50912), potassium (5097
 
 Hint: Use the Parquet format you generated in Homework 2. For reproducibility, make `labevents_pq` folder available at the current working directory `hw3`, for example, by a symbolic link.
 
+**Solution:**
+
+```{r}
+subset_itemid <- c(50912, 50971, 50983, 50902, 50882, 51221, 51301, 50931)
+
+labevents_tble <- arrow::open_dataset("~/labevents_pq") %>% 
+  #Converting to duckdb
+  arrow::to_duckdb() %>%  
+  #Filtering by measurements we want to take
+  filter(itemid %in% subset_itemid) %>%
+  #We keep only the columns we need
+  select(subject_id, itemid, storetime, valuenum) %>%
+  #Mutating columns for proper joins
+  #Mutate subject_id and hadm_id as double to join with icustays_tble
+  mutate(subject_id = as.double(subject_id)) %>%
+  #We inner join with icu stays, keeping only the patients with an icu stay
+  #We inner join to discard nonmatching rows from both tibbles
+  inner_join(icustays_tble, by = c("subject_id"), copy = TRUE) %>%
+  collect()
+
+#Mutate storetime as dttm for comparison to intime
+labevents_tble <- labevents_tble %>% mutate(storetime = 
+  as.POSIXct(storetime, tz = "UTC")) 
+
+#Filtering where storetime < intime (of ICU stay)
+labevents_tble <- labevents_tble %>%  filter(storetime < intime) %>%
+  #We group by stay_id and itemid to get the values for each measurement
+  #of each stay 
+  group_by(stay_id, itemid) %>%
+  #We order by the store time, taking the last measurement before intime
+  #Using slice_max(), we take a slice of size one for the highest time
+  slice_max(order_by = storetime, n = 1) %>%
+  #We ungroup to get the dataframe back to a normal size
+  ungroup()
+
+#We join labevents_tble with d_labitems by item_id to get the labels for the items 
+d_labitems <- read_csv("~/mimic/hosp/d_labitems.csv.gz")
+labevents_tble <- labevents_tble %>% left_join(d_labitems, by = "itemid") %>% 
+  #We subset labevents_tbl to only the columns we need in our final result
+  select(c(subject_id, stay_id, valuenum, label)) %>%
+  #We widen the dataframe to get each row as a subject and ICU stay
+  pivot_wider(names_from = label, values_from = valuenum) %>%
+  #Sorting the tble by subject_id and_stay id for grading purposes
+  arrange(subject_id, stay_id) 
+
+labevents_tble
+```
+
 ## Q6. Vitals from charted events
 
 `chartevents.csv.gz` (<https://mimic.mit.edu/docs/iv/modules/icu/chartevents/>) contains all the charted data available for a patient. During their ICU stay, the primary repository of a patient’s information is their electronic chart. The `itemid` variable indicates a single measurement type in the database. The `value` variable is the value measured for `itemid`. The first 10 lines of `chartevents.csv.gz` are
@@ -342,6 +551,58 @@ We are interested in the vitals for ICU patients: heart rate (220045), systolic 
 ![](chartevents_tble.png)
 
 Hint: Use the Parquet format you generated in Homework 2. For reproducibility, make `chartevents_pq` folder available at the current working directory, for example, by a symbolic link.
+
+**Solution:**
+
+```{r}
+subset_itemid <-c(220045, 220180, 220179, 223761, 220210)
+
+chartevents_tble <- arrow::open_dataset("~/chartevents_pq") %>% 
+  #Converting to duckdb
+  arrow::to_duckdb() %>%  
+  #Subset based on needed measurements
+  filter(itemid %in% subset_itemid) %>%
+  #We keep only the columns we need
+  select(subject_id, stay_id, itemid, storetime, valuenum) %>%
+  #Mutate subject_id, hadm_id, stay_id as double to join with icustays_tble
+  mutate(subject_id = as.double(subject_id)) %>%
+  mutate(stay_id = as.double(stay_id)) %>%
+  #Inner join with ICU Stays
+  #Keep patients with an ICU stay
+  inner_join(icustays_tble, by = c("subject_id", "stay_id"), copy = TRUE) %>%
+  collect()
+
+#Mutate storetime as dttm for comparison to intime
+chartevents_tble <- chartevents_tble %>% mutate(storetime = 
+  as.POSIXct(storetime, tz = "UTC")) 
+
+#Filter by measurements within the ICU stay
+chartevents_tble <- chartevents_tble %>% filter((storetime > intime)
+  & (storetime < outtime)) %>% 
+  #We group by stay_id and itemid to get the values for each measurement
+  #of each stay 
+  group_by(stay_id, itemid) %>%
+  #We order by the store time, taking the first measurement during the ICU stay
+  #Using slice_min(), we take a slice of size one for the smallest time in that
+  #interval
+  slice_min(order_by = storetime, n = 1) %>%
+  #We ungroup to get the dataframe back to a normal size
+  ungroup
+
+#We join labevents_tble with d_items by item_id to get the labels for the items 
+d_items <- read_csv("~/mimic/icu/d_items.csv.gz")
+chartevents_tble <- chartevents_tble %>% left_join(d_items, by = "itemid")
+
+#We subset chartevents_tble to only the columns we need in our final result
+chartevents_tble <- chartevents_tble %>% 
+  select(c(subject_id, stay_id, valuenum, label))
+
+#We widen the dataframe to get each row as a subject and ICU stay
+chartevents_tble <- chartevents_tble %>%
+  pivot_wider(names_from = label, values_from = valuenum)
+chartevents_tble
+  
+```
 
 ## Q7. Putting things together
 
