@@ -512,7 +512,7 @@ labevents_tble <- labevents_tble %>% mutate(storetime =
 labevents_tble <- labevents_tble %>%  filter(storetime < intime) %>%
   #We group by stay_id and itemid to get the values for each measurement
   #of each stay 
-  group_by(stay_id, itemid) %>%
+  group_by(subject_id, stay_id, itemid) %>%
   #We order by the store time, taking the last measurement before intime
   #Using slice_max(), we take a slice of size one for the highest time
   slice_max(order_by = storetime, n = 1) %>%
@@ -564,7 +564,7 @@ chartevents_tble <- arrow::open_dataset("~/chartevents_pq") %>%
   filter(itemid %in% subset_itemid) %>%
   #We keep only the columns we need
   select(subject_id, stay_id, itemid, storetime, valuenum) %>%
-  #Mutate subject_id, hadm_id, stay_id as double to join with icustays_tble
+  #Mutate subject_id and stay_id as double to join with icustays_tble
   mutate(subject_id = as.double(subject_id)) %>%
   mutate(stay_id = as.double(stay_id)) %>%
   #Inner join with ICU Stays
@@ -581,13 +581,14 @@ chartevents_tble <- chartevents_tble %>% filter((storetime > intime)
   & (storetime < outtime)) %>% 
   #We group by stay_id and itemid to get the values for each measurement
   #of each stay 
-  group_by(stay_id, itemid) %>%
+  group_by(subject_id, stay_id, itemid) %>%
   #We order by the store time, taking the first measurement during the ICU stay
   #Using slice_min(), we take a slice of size one for the smallest time in that
   #interval
   slice_min(order_by = storetime, n = 1) %>%
+  summarize(valuenum = mean(valuenum, na.rm = TRUE)) %>%
   #We ungroup to get the dataframe back to a normal size
-  ungroup
+  ungroup() 
 
 #We join labevents_tble with d_items by item_id to get the labels for the items 
 d_items <- read_csv("~/mimic/icu/d_items.csv.gz")
@@ -595,11 +596,12 @@ chartevents_tble <- chartevents_tble %>% left_join(d_items, by = "itemid")
 
 #We subset chartevents_tble to only the columns we need in our final result
 chartevents_tble <- chartevents_tble %>% 
-  select(c(subject_id, stay_id, valuenum, label))
+  select(c(subject_id, stay_id, valuenum, label)) %>%
+  #We widen the dataframe to get each row as a subject and ICU stay
+  pivot_wider(names_from = label, values_from = valuenum) %>%
+  #Sorting the tble by subject_id and_stay id for grading purposes
+  arrange(subject_id, stay_id) 
 
-#We widen the dataframe to get each row as a subject and ICU stay
-chartevents_tble <- chartevents_tble %>%
-  pivot_wider(names_from = label, values_from = valuenum)
 chartevents_tble
   
 ```
@@ -615,6 +617,12 @@ Let us create a tibble `mimic_icu_cohort` for all ICU stays, where rows are all 
 -   the first vital measurements during the ICU stay in `chartevents_tble`
 
 The final `mimic_icu_cohort` should have one row per ICU stay and columns for each variable.
+
+**Solution:**
+
+```{r}
+mimic_icu_cohort
+```
 
 ![](mimic_icu_cohort.png)
 
