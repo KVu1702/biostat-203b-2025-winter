@@ -618,10 +618,6 @@ chartevents_tble <- arrow::open_dataset("~/chartevents_pq") %>%
   arrange(subject_id, stay_id) %>%
   collect()
 
-#Mutate storetime as dttm for comparison to intime
-chartevents_tble <- chartevents_tble %>% mutate(storetime = 
-  as.POSIXct(storetime, tz = "UTC")) 
-
 chartevents_tble
   
 #Clearing up memory for next step
