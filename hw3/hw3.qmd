@@ -233,7 +233,7 @@ ggplot(joined_icu_chart_id, mapping = aes(x = charttime, y = valuenum,
   color = abbreviation, group = abbreviation)) +
   geom_point() +
   geom_line() +
-  facet_grid(abbreviation~stay_id, scales="free", space="free_x") +
+  facet_grid(abbreviation~stay_id, scales="free", space="fixed") +
   scale_x_datetime(guide = guide_axis(n.dodge = 2)) + 
   theme(
     axis.title.y = element_blank(),
@@ -346,7 +346,11 @@ ggplot(num_admissions_per_patient, aes(x = n_admissions,
   ylab("Frequency") + 
   theme(legend.position = "none") +
   labs(title = "Frequency of Admissions Per Patient") 
+```
 
+The chart demonstrates most patients have less than ten hospital admissions because most patients have their conditions treated/cured after a few hospital visits. However, we see that there exist some outliers that have more than a hundred hospital admissions. However, we do not know if this is an outlier due to a technical error or if this patient is chronically sick and requires constant hospital care.
+
+```{r}
 #Admission hour
 
 #Adding an hour column to admissions_tble
@@ -366,7 +370,11 @@ ggplot(n_hour_of_admission, aes(x = admission_hour,
   ylab("Frequency") + 
   theme(legend.position = "none") +
   labs(title = "Frequency of Admissions By Hour") 
+```
 
+The graph demonstrates that most hospital admissions occur at around 7 a.m. or in the afternoon/nighttime from 3 p.m. to midnight. This small initial spike in admissions is likely because most people try to get hospital appointments before work/school at 8 a.m. or 9 a.m. As people get off work or school around 3 p.m., they can make it to the hospital.
+
+```{r}
 #Admission Minute
 
 #Adding a minute column to admissions_tble
@@ -386,7 +394,11 @@ ggplot(n_minute_of_admission, aes(x = admission_minute,
   ylab("Frequency") + 
   theme(legend.position = "none") +
   labs(title = "Frequency of Admissions By Minute") 
+```
 
+This graph demonstrates that most hospital admissions occur at 15-minute intervals starting at the top of the hour. A couple of possible explanations for this pattern are that hospital appointments tend to last in intervals of 15 minutes, from half an hour to 45 minutes to one hour, and so on. This results in appointment admission times scheduled around these intervals.
+
+```{r}
 #Length of Hospital Stay
 
 #Find the duration of the length of stay
@@ -402,6 +414,8 @@ ggplot(admissions_tble, aes(x = length_of_stay)) +
   labs(title = "Frequency of Duration of Stay (Days)") 
 
 ```
+
+This graph demonstrates that the typical duration of stays at the hospital does not last more than 10 days. This pattern means most ailments are treated within that period, except for severe conditions requiring constant and longstanding treatment plans. There are some outliers in stay duration lasting over a year, though this could be an entry error or a patient with a condition that needs lengthy care, such as a coma.
 
 According to the [MIMIC-IV documentation](https://mimic.mit.edu/docs/iv/about/concepts/#date-shifting),
 
@@ -432,7 +446,6 @@ Summarize variables `gender` and `anchor_age` by graphics, and explain any patte
 **Solution:**
 
 ```{r}
-
 #Summarizing Gender
 n_gender <- patients_tble %>% 
   #Group by gender
@@ -446,7 +459,11 @@ ggplot(n_gender, aes(x = gender, y = n_gender, fill = gender)) +
   ylab("Frequency") + 
   theme(legend.position = "right") +
   labs(title = "Frequency of Gender")  
+```
 
+There is not much of a pattern for patient frequencies by gender, except for a slightly higher frequency of female patients. This pattern could be the result of male patients' reluctance to go to a healthcare facility and instead opting to suck it up.
+
+```{r}
 #Summarizing anchor_age
 n_anchor_age <- patients_tble %>% 
   #Group by anchor_age
@@ -456,13 +473,13 @@ n_anchor_age <- patients_tble %>%
 
 ggplot(n_anchor_age, aes(x = anchor_age, y = n_anchor_age)) +
   geom_bar(stat = 'identity') +
-  xlab("anchor_age") + 
+  xlab("Anchor Age") + 
   ylab("Frequency") + 
   theme(legend.position = "none") +
   labs(title = "Frequency of Anchor Ages") 
-
 ```
 
+This chart demonstrates a clear spike in patients' ages around the early teens and preteens. This pattern can be explained by children being more susceptible to becoming sick or injuring themselves and cautious parents feeling the need to admit their children to be safe. There is a decline in patients from 35-45, as health problems do not appear again until patients reach around 50 years of age. As patients pass away of old age, fewer patients are admitted in the later age ranges.
 
 ## Q5. Lab results
 
@@ -489,6 +506,11 @@ Hint: Use the Parquet format you generated in Homework 2. For reproducibility, m
 ```{r}
 subset_itemid <- c(50912, 50971, 50983, 50902, 50882, 51221, 51301, 50931)
 
+#We read in d_labitems by to join with labevents_tble later to get the labels 
+#for the items 
+
+d_labitems <- read_csv("~/mimic/hosp/d_labitems.csv.gz")
+
 labevents_tble <- arrow::open_dataset("~/labevents_pq") %>% 
   #Converting to duckdb
   arrow::to_duckdb() %>%  
@@ -502,34 +524,34 @@ labevents_tble <- arrow::open_dataset("~/labevents_pq") %>%
   #We inner join with icu stays, keeping only the patients with an icu stay
   #We inner join to discard nonmatching rows from both tibbles
   inner_join(icustays_tble, by = c("subject_id"), copy = TRUE) %>%
-  collect()
-
-#Mutate storetime as dttm for comparison to intime
-labevents_tble <- labevents_tble %>% mutate(storetime = 
-  as.POSIXct(storetime, tz = "UTC")) 
-
-#Filtering where storetime < intime (of ICU stay)
-labevents_tble <- labevents_tble %>%  filter(storetime < intime) %>%
+  filter(storetime < intime) %>%
   #We group by stay_id and itemid to get the values for each measurement
   #of each stay 
   group_by(subject_id, stay_id, itemid) %>%
   #We order by the store time, taking the last measurement before intime
   #Using slice_max(), we take a slice of size one for the highest time
   slice_max(order_by = storetime, n = 1) %>%
+  summarize(valuenum = mean(valuenum, na.rm = TRUE)) %>%
   #We ungroup to get the dataframe back to a normal size
-  ungroup()
-
-#We join labevents_tble with d_labitems by item_id to get the labels for the items 
-d_labitems <- read_csv("~/mimic/hosp/d_labitems.csv.gz")
-labevents_tble <- labevents_tble %>% left_join(d_labitems, by = "itemid") %>% 
+  ungroup() %>%
+  #We join labevents_tble with d_labitems by itemid
+  left_join(d_labitems, by = "itemid", copy = TRUE) %>% 
   #We subset labevents_tbl to only the columns we need in our final result
   select(c(subject_id, stay_id, valuenum, label)) %>%
+  #Apply lower case to all labels
+  mutate(label = tolower(label)) %>%
   #We widen the dataframe to get each row as a subject and ICU stay
   pivot_wider(names_from = label, values_from = valuenum) %>%
   #Sorting the tble by subject_id and_stay id for grading purposes
-  arrange(subject_id, stay_id) 
+  arrange(subject_id, stay_id) %>%
+  #Changing white blood cells to wbc, removing spaces
+  rename(wbc = `white blood cells`) %>%
+  collect()
 
 labevents_tble
+
+#Clearing up memory for next step
+gc()
 ```
 
 ## Q6. Vitals from charted events
@@ -557,6 +579,10 @@ Hint: Use the Parquet format you generated in Homework 2. For reproducibility, m
 ```{r}
 subset_itemid <-c(220045, 220180, 220179, 223761, 220210)
 
+#We read in d_items to join with chartevents_tble and get the labels 
+#for the items later
+d_items <- read_csv("~/mimic/icu/d_items.csv.gz")
+
 chartevents_tble <- arrow::open_dataset("~/chartevents_pq") %>% 
   #Converting to duckdb
   arrow::to_duckdb() %>%  
@@ -570,15 +596,8 @@ chartevents_tble <- arrow::open_dataset("~/chartevents_pq") %>%
   #Inner join with ICU Stays
   #Keep patients with an ICU stay
   inner_join(icustays_tble, by = c("subject_id", "stay_id"), copy = TRUE) %>%
-  collect()
-
-#Mutate storetime as dttm for comparison to intime
-chartevents_tble <- chartevents_tble %>% mutate(storetime = 
-  as.POSIXct(storetime, tz = "UTC")) 
-
-#Filter by measurements within the ICU stay
-chartevents_tble <- chartevents_tble %>% filter((storetime > intime)
-  & (storetime < outtime)) %>% 
+  #Filter by measurements within the ICU stay
+  filter((storetime > intime) & (storetime < outtime)) %>% 
   #We group by stay_id and itemid to get the values for each measurement
   #of each stay 
   group_by(subject_id, stay_id, itemid) %>%
@@ -588,22 +607,25 @@ chartevents_tble <- chartevents_tble %>% filter((storetime > intime)
   slice_min(order_by = storetime, n = 1) %>%
   summarize(valuenum = mean(valuenum, na.rm = TRUE)) %>%
   #We ungroup to get the dataframe back to a normal size
-  ungroup() 
-
-#We join labevents_tble with d_items by item_id to get the labels for the items 
-d_items <- read_csv("~/mimic/icu/d_items.csv.gz")
-chartevents_tble <- chartevents_tble %>% left_join(d_items, by = "itemid")
-
-#We subset chartevents_tble to only the columns we need in our final result
-chartevents_tble <- chartevents_tble %>% 
+  ungroup() %>%
+  left_join(d_items, by = "itemid", copy = TRUE) %>%
   select(c(subject_id, stay_id, valuenum, label)) %>%
+  #Apply lower case to all labels and remove sapce
+  mutate(label = str_replace_all(tolower(label), " ", "_")) %>%
   #We widen the dataframe to get each row as a subject and ICU stay
   pivot_wider(names_from = label, values_from = valuenum) %>%
   #Sorting the tble by subject_id and_stay id for grading purposes
-  arrange(subject_id, stay_id) 
+  arrange(subject_id, stay_id) %>%
+  collect()
+
+#Mutate storetime as dttm for comparison to intime
+chartevents_tble <- chartevents_tble %>% mutate(storetime = 
+  as.POSIXct(storetime, tz = "UTC")) 
 
 chartevents_tble
   
+#Clearing up memory for next step
+gc()
 ```
 
 ## Q7. Putting things together
@@ -618,13 +640,29 @@ Let us create a tibble `mimic_icu_cohort` for all ICU stays, where rows are all 
 
 The final `mimic_icu_cohort` should have one row per ICU stay and columns for each variable.
 
+![](mimic_icu_cohort.png)
+
 **Solution:**
 
 ```{r}
-mimic_icu_cohort
-```
 
-![](mimic_icu_cohort.png)
+mimic_icu_cohort <- icustays_tble %>% 
+  #Left join with admissions_tble by subject_id and hadm_id
+  left_join(admissions_tble, by = c("subject_id", "hadm_id")) %>%
+  #Left join with patients_tbl by subject_id
+  left_join(patients_tble, by = c("subject_id")) %>%
+  #Left join with labevents_tble by subject_id and stay_id
+  left_join(labevents_tble, by = c("subject_id", "stay_id")) %>%
+  #Left join with chartevents_tble by subject_id and stay_id
+  left_join(chartevents_tble, by = c("subject_id", "stay_id")) %>%
+  #Filter by adults (anchor age >= 18)
+  filter(anchor_age >= 18) %>%
+  #Sorting the tble by subject_id and_stay id for grading purposes
+  arrange(subject_id, stay_id) 
+
+mimic_icu_cohort
+
+```
 
 ## Q8. Exploratory data analysis (EDA)
 
@@ -637,3 +675,150 @@ Summarize the following information about the ICU stay cohort `mimic_icu_cohort`
 -   Length of ICU stay `los` vs the first vital measurements within the ICU stay
 
 -   Length of ICU stay `los` vs first ICU unit
+
+**Solution:**
+
+```{r}
+#For each demographic, we group by the demographic and take the mean of the 
+#length of stay.
+
+#Race
+los_vs_demo_race <- mimic_icu_cohort %>%
+  group_by(race) %>%
+  summarize(average_length_of_stay = mean(los, na.rm = TRUE)) %>%
+  arrange(average_length_of_stay) 
+
+ggplot(los_vs_demo_race, mapping = aes(x = race, y = average_length_of_stay, 
+  fill = race)) +
+  geom_bar(stat = "identity") + 
+  #Rotating the x-axis
+  theme(axis.text.x = element_text(size = 6, angle = 90, vjust = 0.5, hjust=1),
+        legend.position="none") +
+  ylab("Average Length of Stay (Days)") +
+  xlab("Race") +
+  ggtitle("Average LOS vs. Race")
+```
+
+This chart demonstrates that South American and Hispanic/Latino patients tend to stay the least amount of time in the ICU. While any explanation behind this pattern is a hypothesis, some possible explanations can be fear of medical bills or distrust of the medical systems. Unknown and unable to obtain races have the highest average length of stay. The higher average length of stay could result from patients in a very critical condition where they cannot provide this information.
+
+```{r}
+#Insurance
+los_vs_demo_insurance <- mimic_icu_cohort %>%
+  group_by(insurance) %>%
+  summarize(average_length_of_stay = mean(los, na.rm = TRUE)) %>%
+  arrange(average_length_of_stay) 
+
+ggplot(los_vs_demo_insurance, mapping = aes(x = insurance, 
+  y = average_length_of_stay, fill = insurance)) +
+  geom_bar(stat = "identity") + 
+  #Rotating the x-axis
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1),
+        legend.position="none") +
+  ylab("Average Length of Stay (Days)") +
+  xlab("Insurance") +
+  ggtitle("Average LOS vs. Insurance")
+```
+
+There is not much of a pattern of the average length of ICU stay depending on the type of medical insurance. Patients with no (N/A) insurance tend to stay slightly less than those covered by insurance. This pattern is likely due to patients without insurance being more cost-conscious about their stay.
+
+```{r}
+#Gender
+los_vs_demo_gender <- mimic_icu_cohort %>%
+  group_by(gender) %>%
+  summarize(average_length_of_stay = mean(los, na.rm = TRUE)) %>%
+  arrange(average_length_of_stay) 
+
+ggplot(los_vs_demo_gender, mapping = aes(x = gender, 
+  y = average_length_of_stay, fill = gender)) +
+  geom_bar(stat = "identity") +
+  labs(fill = "Gender") +
+  ylab("Average Length of Stay (Days)") +
+  xlab("Gender") +
+  ggtitle("Average LOS vs. Gender")
+```
+
+There is not a large difference/noticeable pattern in the average length of ICU stay between males and females. The small difference could be the result of sampling.
+
+```{r}
+#Age at intime
+los_vs_demo_age_at_intime <- mimic_icu_cohort %>%
+  group_by(anchor_age) %>%
+  summarize(average_length_of_stay = mean(los, na.rm = TRUE))
+
+ggplot(los_vs_demo_age_at_intime, mapping = aes(x = anchor_age, 
+  y = average_length_of_stay, fill = anchor_age)) +
+  geom_bar(stat = "identity") +
+  labs(fill = "Age") +
+  ylab("Average Length of Stay (Days)") +
+  xlab("Age") +
+  ggtitle("Average LOS vs. Anchor Age")
+```
+
+The average stay length is consistent throughout the ages except for the early teens and later in life. ICU patients in their early teens could have a faster recovery time due to their youth, and ICU patients later in life could not have much life left in them, leading to shorter ICU times before they pass away.
+
+
+```{r}
+#Create a list of measurements taken before ICU Stay
+#creatinine, potassium, sodium, chloride, bicarbonate, hematocrit, 
+#white blood cell count, glucose (50931)
+measure_name_before_ICU_stay = c('creatinine', 'potassium', 'sodium',
+  'chloride', 'bicarbonate', 'hematocrit', 'wbc', 'glucose')
+
+for (measurement in measure_name_before_ICU_stay) {
+    label_title = str_to_title(str_replace_all(measurement, "_", " "))
+    print(ggplot(mimic_icu_cohort, aes(x = los, 
+      y = mimic_icu_cohort[[measurement]])) + 
+      geom_point() +
+    xlab("Length of Stay (Days)") +
+    ylab(label_title) +
+    ggtitle(str_glue("Average LOS vs. {label_title}"))
+      ) 
+}
+```
+
+These charts demonstrate some patients have abnormally low or high last measurements before their ICU stay. This pattern could result from a measurement spike that needed short, critical care to restabilize them. For patients with longer stays, the measurements appear more stable. This stability must mean that patients with lengthier stays have a condition unrelated to these measurements.
+
+```{r}
+#Create a list of measurements taken after ICU Stay
+#heart rate, systolic non-invasive blood pressure, diastolic non-invasive blood 
+#pressure, body temperature in Fahrenheit, and respiratory rate 
+measure_name_after_ICU_stay = c('heart_rate', 
+                                'non_invasive_blood_pressure_systolic', 
+                                'non_invasive_blood_pressure_diastolic',
+                                'respiratory_rate',
+                                'temperature_fahrenheit'
+                                )
+for (measurement in measure_name_after_ICU_stay) {
+    label_title = str_to_title(str_replace_all(measurement, "_", " "))
+    print(ggplot(mimic_icu_cohort, aes(x = los, 
+      y = mimic_icu_cohort[[measurement]])) + 
+      geom_point() +
+    xlab("Length of Stay (Days)") +
+    ylab(label_title) + 
+    ggtitle(str_glue("Average LOS vs. {label_title}"))
+      ) 
+}
+```
+
+These charts demonstrate strange outliers in the first measurements taken during patient ICU stays. For example, a heart rate exceeding 750 or blood pressure exceeding the 10000's should not be possible. These outliers could result from the chaos of the ICU and healthcare professionals mistakenly inputting in patient measurements.
+
+```{r}
+#First ICU Unit
+#We group by the first ICU Unit and take the mean of the length of stay.
+los_vs_demo_first_ICU <- mimic_icu_cohort %>%
+  group_by(first_careunit) %>%
+  summarize(average_length_of_stay = mean(los, na.rm = TRUE)) %>%
+  arrange(average_length_of_stay) 
+
+ggplot(los_vs_demo_first_ICU, mapping = aes(x = first_careunit, 
+  y = average_length_of_stay, fill = first_careunit)) +
+  geom_bar(stat = "identity") + 
+  #Rotating the x-axis
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        legend.position="none") +
+  ylab("Average Length of Stay (Days)") +
+  xlab("Care Unit") + 
+  ggtitle("Average LOS vs. Care Unit")
+```
+
+This pattern demonstrates evident differences in average stay lengths depending on the care unit. This pattern results from different conditions requiring different lengths of treatment plans from their respective care units. For example, surgery care units require lengthier stay lengths for recovery times.
