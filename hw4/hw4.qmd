@@ -150,42 +150,46 @@ labevents_tble <- tbl(con_bq, "labevents") |>
 Connect to `chartevents` table and retrieve a subset that only contain subjects who appear in `icustays_tble` and the chart events listed in HW3. Only keep the first chart events (by `storetime`) during ICU stay and pivot chart events to become variables/columns. Write all steps in _one_ chain of pipes. Similary to HW3, if a vital has multiple measurements at the first `storetime`, average them.
 ```{r}
 # # TODO
-subset_itemid <- c(50912, 50971, 50983, 50902, 50882, 51221, 51301, 50931)
+#Taking the subset of item_ids needed
+subset_itemid <-c(220045, 220180, 220179, 223761, 220210)
+
+#Connecting to d_items to get item names
+d_items_tble <- tbl(con_bq, "d_items") |>
+  arrange(itemid) |>
+  # show_query() |>
+  print(width = Inf)
 
 chartevents_tble <- tbl(con_bq, "chartevents") |>
-  arrange(subject_id, hadm_id, stay_id) |>
-  #Filtering by measurements we want to take
+  #Subset based on needed measurements
   filter(itemid %in% subset_itemid) |>
   #We keep only the columns we need
-  select(subject_id, itemid, storetime, valuenum) |>
-  #Mutating columns for proper joins
-  #Mutate subject_id and hadm_id as double to join with icustays_tble
-  mutate(subject_id = as.double(subject_id)) |>
-  #We inner join with icu stays, keeping only the patients with an icu stay
-  #We inner join to discard nonmatching rows from both tibbles
-  inner_join(icustays_tble, by = c("subject_id"), copy = TRUE) |>
-  filter(storetime < intime) |>
+  select(subject_id, stay_id, itemid, storetime, valuenum) %>%
+  #Mutate subject_id and stay_id as double to join with icustays_tble
+  mutate(subject_id = as.double(subject_id)) %>%
+  mutate(stay_id = as.double(stay_id)) %>%
+  #Inner join with ICU Stays
+  #Keep patients with an ICU stay
+  inner_join(icustays_tble, by = c("subject_id", "stay_id"), copy = TRUE) %>%
+  #Filter by measurements within the ICU stay
+  filter((storetime > intime) & (storetime < outtime)) %>% 
   #We group by stay_id and itemid to get the values for each measurement
   #of each stay 
-  group_by(subject_id, stay_id, itemid) |>
-  #We order by the store time, taking the last measurement before intime
-  #Using slice_max(), we take a slice of size one for the highest time
-  slice_max(order_by = storetime, n = 1) %>%
-  summarize(valuenum = mean(valuenum, na.rm = TRUE)) |>
+  group_by(subject_id, stay_id, itemid) %>%
+  #We order by the store time, taking the first measurement during the ICU stay
+  #Using slice_min(), we take a slice of size one for the smallest time in that
+  #interval
+  slice_min(order_by = storetime, n = 1) %>%
+  summarize(valuenum = mean(valuenum, na.rm = TRUE)) %>%
   #We ungroup to get the dataframe back to a normal size
   ungroup() %>%
-  #We join labevents_tble with d_labitems by itemid
-  left_join(d_labitems, by = "itemid", copy = TRUE) |> 
-  #We subset labevents_tbl to only the columns we need in our final result
-  select(c(subject_id, stay_id, valuenum, label)) |>
-  #Apply lower case to all labels
-  mutate(label = tolower(label)) |>
+  left_join(d_items_tble, by = "itemid", copy = TRUE) %>%
+  select(c(subject_id, stay_id, valuenum, label)) %>%
+  #Apply lower case to all labels and remove sapce
+  mutate(label = str_replace_all(tolower(label), " ", "_")) %>%
   #We widen the dataframe to get each row as a subject and ICU stay
   pivot_wider(names_from = label, values_from = valuenum) %>%
   #Sorting the tble by subject_id and_stay id for grading purposes
-  arrange(subject_id, stay_id) |>
-  #Changing white blood cells to wbc, removing spaces
-  rename(wbc = `white blood cells`) |>
+  arrange(subject_id, stay_id) %>%
   # show_query() |>
   print(width = Inf)
 ```
