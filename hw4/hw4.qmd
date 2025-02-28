@@ -163,33 +163,35 @@ chartevents_tble <- tbl(con_bq, "chartevents") |>
   #Subset based on needed measurements
   filter(itemid %in% subset_itemid) |>
   #We keep only the columns we need
-  select(subject_id, stay_id, itemid, storetime, valuenum) %>%
+  select(subject_id, stay_id, itemid, storetime, valuenum) |>
   #Mutate subject_id and stay_id as double to join with icustays_tble
-  mutate(subject_id = as.double(subject_id)) %>%
-  mutate(stay_id = as.double(stay_id)) %>%
+  mutate(subject_id = as.double(subject_id)) |>
+  mutate(stay_id = as.double(stay_id)) |>
   #Inner join with ICU Stays
   #Keep patients with an ICU stay
-  inner_join(icustays_tble, by = c("subject_id", "stay_id"), copy = TRUE) %>%
+  inner_join(icustays_tble, by = c("subject_id", "stay_id"), copy = TRUE) |>
   #Filter by measurements within the ICU stay
-  filter((storetime > intime) & (storetime < outtime)) %>% 
+  filter((storetime > intime) & (storetime < outtime)) |>
   #We group by stay_id and itemid to get the values for each measurement
   #of each stay 
-  group_by(subject_id, stay_id, itemid) %>%
+  group_by(subject_id, stay_id, itemid) |>
   #We order by the store time, taking the first measurement during the ICU stay
   #Using slice_min(), we take a slice of size one for the smallest time in that
   #interval
-  slice_min(order_by = storetime, n = 1) %>%
-  summarize(valuenum = mean(valuenum, na.rm = TRUE)) %>%
+  slice_min(order_by = storetime, n = 1) |>
+  summarize(valuenum = mean(valuenum, na.rm = TRUE)) |>
   #We ungroup to get the dataframe back to a normal size
   ungroup() %>%
-  left_join(d_items_tble, by = "itemid", copy = TRUE) %>%
-  select(c(subject_id, stay_id, valuenum, label)) %>%
+  left_join(d_items_tble, by = "itemid", copy = TRUE) |>
+  select(c(subject_id, stay_id, valuenum, label)) |>
   #Apply lower case to all labels and remove sapce
-  mutate(label = str_replace_all(tolower(label), " ", "_")) %>%
+  #Note, we have to use the SQL equivalent of str_replace_all
+  #Which is REGEXP_REPLACE()
+  mutate(label = REGEXP_REPLACE(tolower(label), " ", "_")) |>
   #We widen the dataframe to get each row as a subject and ICU stay
-  pivot_wider(names_from = label, values_from = valuenum) %>%
+  pivot_wider(names_from = label, values_from = valuenum) |>
   #Sorting the tble by subject_id and_stay id for grading purposes
-  arrange(subject_id, stay_id) %>%
+  arrange(subject_id, stay_id) |>
   # show_query() |>
   print(width = Inf)
 ```
@@ -200,7 +202,24 @@ This step is similar to Q7 of HW3. Using _one_ chain of pipes `|>` to perform fo
 
 ```{r}
 # # TODO
-# mimic_icu_cohort <- 
+mimic_icu_cohort <- icustays_tble |>
+  #Left join with admissions_tble by subject_id and hadm_id
+  left_join(admissions_tble, by = c("subject_id", "hadm_id")) |>
+  #Left join with patients_tbl by subject_id
+  left_join(patients_tble, by = c("subject_id")) |>
+  #Left join with labevents_tble by subject_id and stay_id
+  left_join(labevents_tble, by = c("subject_id", "stay_id")) |>
+  #Left join with chartevents_tble by subject_id and stay_id
+  left_join(chartevents_tble, by = c("subject_id", "stay_id")) |>
+  #Creating age at intime %>%
+  mutate(age_intime = anchor_age + (year(intime) - anchor_year)) |>
+  #Filter by adults (age_intime >= 18)
+  filter(age_intime >= 18) |>
+  #Collecting the tibble
+  collect() |>
+  #Sorting the tble by subject_id and_stay id for grading purposes
+  arrange(subject_id, stay_id) |>
+  print(width = Inf)
 ```
 
 ### Q1.8 Preprocessing
@@ -210,6 +229,42 @@ Perform the following preprocessing steps. (i) Lump infrequent levels into "Othe
 Hint: Below is a numerical summary of my tibble after preprocessing:
 
 <iframe width=95% height="500" src="./mimic_icu_cohort_gtsummary.html"></iframe>
+
+**Solution**
+
+```{r}
+library('forcats')
+
+mimic_icu_cohort <- mimic_icu_cohort |>
+  #Lumping infrequent levels using fct_lump_n
+  mutate(first_careunit = fct_lump_n(first_careunit, n = 4),
+  last_careunit = fct_lump_n(last_careunit, n = 4),
+  admission_type = fct_lump_n(admission_type, n = 4),
+  admission_location = fct_lump_n(admission_location, n = 4),
+  discharge_location = fct_lump_n(discharge_location, n = 4)) |>
+  #Collapsing the levels of race
+  mutate(race = fct_collapse(race, 
+  ASIAN = unique(mimic_icu_cohort$race)[grep('ASIAN', 
+  unique(mimic_icu_cohort$race))],
+  BLACK = unique(mimic_icu_cohort$race)[grep('BLACK', 
+  unique(mimic_icu_cohort$race))],
+  HISPANIC = unique(mimic_icu_cohort$race)[grep('HISPANIC', 
+  unique(mimic_icu_cohort$race))],
+  WHITE = unique(mimic_icu_cohort$race)[grep('WHITE', 
+  unique(mimic_icu_cohort$race))],
+  OTHER = unique(mimic_icu_cohort$race)[!grepl('ASIAN|BLACK|HISPANIC|WHITE', 
+  unique(mimic_icu_cohort$race))])) |>
+  #Creating a variable los_long 
+  mutate(los_long = (los >= 2)) |>
+  tbl_summary(by = los_long, include = c(first_careunit, last_careunit, los,
+  admission_type, admission_location, discharge_location, insurance, language,
+  marital_status, race, hospital_expire_flag, gender, dod, chloride, creatinine,
+  sodium, potassium, glucose, hematocrit, wbc, bicarbonate, 
+  non_invasive_blood_pressure_systolic, non_invasive_blood_pressure_diastolic,
+  respiratory_rate, temperature_fahrenheit, heart_rate, age_intime))
+
+mimic_icu_cohort
+```
 
 ### Q1.9 Save the final tibble
 
@@ -235,3 +290,7 @@ Although it is not a good practice to add big data files to Git, for grading pur
 ## Q2. Shiny app
 
 Develop a Shiny app for exploring the ICU cohort data created in Q1. The app should reside in the `mimiciv_shiny` folder. The app should contain at least two tabs. One tab provides easy access to the graphical and numerical summaries of variables (demographics, lab measurements, vitals) in the ICU cohort, using the `mimic_icu_cohort.rds` you curated in Q1. The other tab allows user to choose a specific patient in the cohort and display the patient's ADT and ICU stay information as we did in Q1 of HW3, by dynamically retrieving the patient's ADT and ICU stay information from BigQuery database. Again, do **not** ever add the BigQuery token to your Git repository. If you do so, you will lose 50 points.
+
+
+
+
