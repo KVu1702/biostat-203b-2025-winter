@@ -3,6 +3,7 @@ title: "Biostat 203B Homework 4"
 subtitle: "Due Mar 9 @ 11:59PM"
 author: "Khoa Vu 705600710"
 format:
+  pdf: default
   html:
     theme: cosmo
     embed-resources: true
