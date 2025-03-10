@@ -3,6 +3,7 @@ title: "Biostat 203B Homework 4"
 subtitle: "Due Mar 9 @ 11:59PM"
 author: "Khoa Vu 705600710"
 format:
+  pdf: default
   html:
     theme: cosmo
     embed-resources: true
@@ -219,7 +220,8 @@ mimic_icu_cohort <- icustays_tble |>
   collect() |>
   #Sorting the tble by subject_id and_stay id for grading purposes
   arrange(subject_id, stay_id) |>
-  print(width = Inf)
+  print(width = Inf) |>
+  collect()
 ```
 
 ### Q1.8 Preprocessing
