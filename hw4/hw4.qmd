@@ -220,7 +220,8 @@ mimic_icu_cohort <- icustays_tble |>
   collect() |>
   #Sorting the tble by subject_id and_stay id for grading purposes
   arrange(subject_id, stay_id) |>
-  print(width = Inf)
+  print(width = Inf) |>
+  collect()
 ```
 
 ### Q1.8 Preprocessing
