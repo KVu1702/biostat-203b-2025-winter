@@ -159,56 +159,50 @@ logit_mod <-
 #Creating the logistic regression workflow with the recipe and model
 logit_wf <- workflow() |>
   add_recipe(logit_recipe) |>
-  add_model(logit_mod) |>
-  print()
+  add_model(logit_mod) 
 
 #Defining the parameter grid we want to try in 5-fold CV
 param_grid <- grid_regular(
   penalty(range = c(-6, 3)), 
   mixture(),
   levels = c(100, 5)
-  ) |>
-  print()
+  ) 
 
 #Setting seed for 5-fold CV
 set.seed(203)
 
 #Creating the 5-folds
-folds <- vfold_cv(mimiciv_icu_cohort, v = 5)
+folds_logit <- vfold_cv(mimiciv_icu_cohort, v = 5)
 
 #Fitting the logistic regression model with the tunable parameters with the
 #metrics of roc/auc and accuracy
-(logit_fit <- logit_wf |>
+logit_fit <- logit_wf |>
   tune_grid(
-    resamples = folds,
+    resamples = folds_logit,
     grid = param_grid,
     metrics = metric_set(roc_auc, accuracy)
-    )) |>
-  system.time()
-
+    )
 #Selecting the best model as the one with the highest roc/auc
 best_logit <- logit_fit |>
   select_best(metric = "roc_auc")
-best_logit
 
 #Creating the final workflow with the best logistic regression model
-final_wf <- logit_wf |>
+final_wf_logit <- logit_wf |>
   finalize_workflow(best_logit)
-final_wf
 
 #Fit the best model with the training data, then test it on the test data
-final_fit <- 
-  final_wf |>
+final_fit_logit <- 
+  final_wf_logit |>
   last_fit(data_split)
 
 #Collecting the metrics of the best logistic regression model.
-final_fit |> 
+final_fit_logit |> 
   collect_metrics()
 ```
 
 ```{r}
 #XGBoost
-#use code from the lecture nodes, defining the gradient boost recipe
+#use code from the lecture notes, defining the XGBoost recipe
 gb_recipe <- 
   recipe(
     los_long ~ ., 
@@ -228,7 +222,84 @@ gb_recipe <-
   # center and scale numeric data
   step_normalize(all_numeric_predictors()) 
 
+#Creating the XGBoost model with the parameters we want to tune
 
+gb_mod <- 
+  boost_tree(
+    mode = "classification",
+    trees = 1000, 
+    tree_depth = tune(),
+    learn_rate = tune()
+  ) |> 
+  set_engine("xgboost")
+
+#Creating the XGBoost workflow with the recipe and model
+gb_wf <- workflow() |>
+  add_recipe(gb_recipe) |>
+  add_model(gb_mod)
+
+#Defining the parameter grid we want to try in 5-fold CV
+param_grid <- grid_regular(
+  tree_depth(range = c(1L, 3L)),
+  learn_rate(range = c(-5, 2), trans = log10_trans()),
+  levels = c(3, 10)
+  )
+
+#Setting seed for 5-fold CV
+set.seed(203)
+
+#Creating the 5-folds
+folds <- vfold_cv(mimiciv_icu_cohort, v = 5)
+
+
+#Fitting the XGBoost model with the tunable parameters with the
+#metrics of roc/auc and accuracy
+gb_fit <- gb_wf |>
+  tune_grid(
+    resamples = folds,
+    grid = param_grid,
+    metrics = metric_set(roc_auc, accuracy)
+    )
+
+#Selecting the best model as the one with the highest roc/auc
+best_gb <- gb_fit |>
+  select_best(metric = "roc_auc")
+
+#Creating the final workflow with the best XGBoost model
+final_wf_gb <- gb_wf |>
+  finalize_workflow(best_gb)
+
+#Fit the best model with the training data, then test it on the test data
+final_fit_gb <- 
+  final_wf_gb |>
+  last_fit(data_split)
+
+#Collecting the metrics of the best XGBoost model.
+final_fit_gb |> 
+  collect_metrics()
+```
+
+```{r}
+#SVM
+#use code from the lecture notes, defining the SVM recipe
+svm_recipe <- 
+  recipe(
+    los_long ~ ., 
+    data = mimiciv_icu_cohort
+  ) %>%
+  # Mean imputation for all lab events
+  step_impute_mean(hematocrit) %>%
+  step_impute_mean(sodium) %>%
+  step_impute_mean(bicarbonate) %>%
+  step_impute_mean(chloride) %>%
+  step_impute_mean(wbc) %>%
+  step_impute_mean(creatinine) %>%
+  step_impute_mean(glucose) %>%
+  step_impute_mean(potassium) %>%
+  # zero-variance filter
+  step_zv(all_numeric_predictors()) %>%
+  # center and scale numeric data
+  step_normalize(all_numeric_predictors()) 
 ```
 
 4.  Compare model classification performance on the test set. Report both the area under ROC curve and accuracy for each machine learning algorithm and the model stacking. Interpret the results. What are the most important features in predicting long ICU stays? How do the models compare in terms of performance and interpretability?
