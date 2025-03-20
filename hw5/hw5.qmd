@@ -19,7 +19,7 @@ Using the ICU cohort `mimiciv_icu_cohort.rds` you built in Homework 4, develop a
 
 1.  Data preprocessing and feature engineering.
 
-**Solution**
+**Solution:**
 
 Display machine information:
 
@@ -33,20 +33,70 @@ Display my machine memory.
 memuse::Sys.meminfo()
 ```
 
+Load database libraries and the tidyverse frontend:
 ```{r}
+library(GGally)
+library(gtsummary)
+library(tidyverse)
+library(tidymodels)
+```
 
+```{r}
 #Reading in the RDS object
 mimiciv_icu_cohort <- readRDS("../hw4/mimiciv_shiny/mimic_icu_cohort.rds")
 
-#Creating our los_long variable, as in homework 4
-mimiciv_icu_cohort <- mimiciv_icu_cohort %>%
-  mutate(los_long = (los >= 2))
+#We want to use the last lab measurements before the ICU stay as features
+#(chart events) to predict whether an ICU stay will be long or short
+#We also want to keep subject_id, hadm_id, and stay_id to sort the values
 
-#We saw in homework 4 that some variables either had some biologically 
-#impossible measurements (e.g. negative or unbelievable large values)
+non_predicting_features <- c("subject_id",
+                         "hadm_id",
+                         "stay_id")
+
+predicting_features <- c("hematocrit",
+                         "sodium",
+                         "bicarbonate",
+                         "chloride",
+                         "wbc",
+                         "creatinine",
+                         "glucose",
+                         "potassium")
+
+outcome_feature <- c("los_long")
+
+
+#First, we create our los_long variable, as in homework 4
+#Then, we select the dataframe only for our variables of interest
+
+#For preprocessing:
+#We remove patients with an NA los_long variable, since we cannot predict with
+#no outcome variable
+#We saw in homework 4 that some last lab measurements had some biologically 
+#impossiblely large measurments.
 #We remove these outliers from that data set.
+#Once the outliers are removed, our imputation is more robust, allowing us to 
+#imputate with the mean in our workflow
 
-mimiciv_icu_cohort <- 
+mimiciv_icu_cohort <- mimiciv_icu_cohort %>%
+  mutate(los_long = (los >= 2)) %>%
+  #Convert los_long to a factor
+  mutate(los_long = as.factor(los_long)) %>%
+  select(all_of(c(non_predicting_features, 
+           predicting_features, 
+           outcome_feature))) %>%
+  filter(!is.na(los_long)) %>%
+  #To filter out outliers, we use boxplot.stats()
+  #The function returns a dataframe with an out (outliers) column
+  #This column contains values considered as outliers
+  #We filter out values determined as an outlier 
+  filter(!hematocrit %in% boxplot.stats(hematocrit)$out) %>%
+  filter(!sodium %in% boxplot.stats(sodium)$out) %>%
+  filter(!bicarbonate %in% boxplot.stats(bicarbonate)$out) %>%
+  filter(!chloride %in% boxplot.stats(chloride)$out) %>%
+  filter(!wbc %in% boxplot.stats(wbc)$out) %>%
+  filter(!creatinine %in% boxplot.stats(creatinine)$out) %>%
+  filter(!glucose %in% boxplot.stats(glucose)$out) %>%
+  filter(!potassium %in% boxplot.stats(potassium)$out)
 
 ```
 
@@ -57,8 +107,12 @@ mimiciv_icu_cohort <-
 set.seed(203)
 
 # sort
-mimiciv_icu_cohort <- mimiciv_icu_cohort |>
-  arrange(subject_id, hadm_id, stay_id)
+mimiciv_icu_cohort <- mimiciv_icu_cohort %>%
+  arrange(subject_id, hadm_id, stay_id) %>%
+  #After sorting, we can remove the features we sort by to simplify the 
+  #dataframe
+  select(all_of(c(predicting_features, 
+           outcome_feature))) 
 
 data_split <- initial_split(
   mimiciv_icu_cohort, 
@@ -69,5 +123,112 @@ data_split <- initial_split(
 ```
 
 3.  Train and tune the models using the training set.
+
+**Solution:**
+
+```{r}
+#Logistic Regression
+#Using code from the lecture notes, defining the logistic regression recipe
+logit_recipe <- 
+  recipe(
+    los_long ~ ., 
+    data = mimiciv_icu_cohort
+  ) %>%
+  # Mean imputation for all lab events
+  step_impute_mean(hematocrit) %>%
+  step_impute_mean(sodium) %>%
+  step_impute_mean(bicarbonate) %>%
+  step_impute_mean(chloride) %>%
+  step_impute_mean(wbc) %>%
+  step_impute_mean(creatinine) %>%
+  step_impute_mean(glucose) %>%
+  step_impute_mean(potassium) %>%
+  # zero-variance filter
+  step_zv(all_numeric_predictors()) %>%
+  # center and scale numeric data
+  step_normalize(all_numeric_predictors()) 
+
+#Creating the logistic regression model with the parameters we want to tune
+logit_mod <- 
+  logistic_reg(
+    penalty = tune(), 
+    mixture = tune()
+  ) |> 
+  set_engine("glmnet", standardize = FALSE) 
+
+#Creating the logistic regression workflow with the recipe and model
+logit_wf <- workflow() |>
+  add_recipe(logit_recipe) |>
+  add_model(logit_mod) |>
+  print()
+
+#Defining the parameter grid we want to try in 5-fold CV
+param_grid <- grid_regular(
+  penalty(range = c(-6, 3)), 
+  mixture(),
+  levels = c(100, 5)
+  ) |>
+  print()
+
+#Setting seed for 5-fold CV
+set.seed(203)
+
+#Creating the 5-folds
+folds <- vfold_cv(mimiciv_icu_cohort, v = 5)
+
+#Fitting the logistic regression model with the tunable parameters with the
+#metrics of roc/auc and accuracy
+(logit_fit <- logit_wf |>
+  tune_grid(
+    resamples = folds,
+    grid = param_grid,
+    metrics = metric_set(roc_auc, accuracy)
+    )) |>
+  system.time()
+
+#Selecting the best model as the one with the highest roc/auc
+best_logit <- logit_fit |>
+  select_best(metric = "roc_auc")
+best_logit
+
+#Creating the final workflow with the best logistic regression model
+final_wf <- logit_wf |>
+  finalize_workflow(best_logit)
+final_wf
+
+#Fit the best model with the training data, then test it on the test data
+final_fit <- 
+  final_wf |>
+  last_fit(data_split)
+
+#Collecting the metrics of the best logistic regression model.
+final_fit |> 
+  collect_metrics()
+```
+
+```{r}
+#XGBoost
+#use code from the lecture nodes, defining the gradient boost recipe
+gb_recipe <- 
+  recipe(
+    los_long ~ ., 
+    data = mimiciv_icu_cohort
+  ) %>%
+  # Mean imputation for all lab events
+  step_impute_mean(hematocrit) %>%
+  step_impute_mean(sodium) %>%
+  step_impute_mean(bicarbonate) %>%
+  step_impute_mean(chloride) %>%
+  step_impute_mean(wbc) %>%
+  step_impute_mean(creatinine) %>%
+  step_impute_mean(glucose) %>%
+  step_impute_mean(potassium) %>%
+  # zero-variance filter
+  step_zv(all_numeric_predictors()) %>%
+  # center and scale numeric data
+  step_normalize(all_numeric_predictors()) 
+
+
+```
 
 4.  Compare model classification performance on the test set. Report both the area under ROC curve and accuracy for each machine learning algorithm and the model stacking. Interpret the results. What are the most important features in predicting long ICU stays? How do the models compare in terms of performance and interpretability?
