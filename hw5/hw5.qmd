@@ -39,7 +39,11 @@ library(GGally)
 library(gtsummary)
 library(tidyverse)
 library(tidymodels)
+library(stacks)
+library(vip)
 ```
+
+To predict ICU stay duration, we use the last lab measurements before the ICU stay as features.
 
 ```{r}
 #Reading in the RDS object
@@ -120,6 +124,10 @@ data_split <- initial_split(
   strata = "los_long", 
   prop = 0.5
   )
+
+#Creating dataframes of the training and test splits
+los_other <- training(data_split)
+los_test <- testing(data_split)
 ```
 
 3.  Train and tune the models using the training set.
@@ -162,10 +170,10 @@ logit_wf <- workflow() |>
   add_model(logit_mod) 
 
 #Defining the parameter grid we want to try in 5-fold CV
-param_grid <- grid_regular(
-  penalty(range = c(-6, 3)), 
-  mixture(),
-  levels = c(100, 5)
+param_grid_logit <- grid_regular(
+  penalty(range = c(-8, -6)), 
+  mixture(range = c(0, 1)),
+  levels = c(5, 2)
   ) 
 
 #Setting seed for 5-fold CV
@@ -179,7 +187,7 @@ folds_logit <- vfold_cv(mimiciv_icu_cohort, v = 5)
 logit_fit <- logit_wf |>
   tune_grid(
     resamples = folds_logit,
-    grid = param_grid,
+    grid = param_grid_logit,
     metrics = metric_set(roc_auc, accuracy)
     )
 #Selecting the best model as the one with the highest roc/auc
@@ -202,7 +210,7 @@ final_fit_logit |>
 
 ```{r}
 #XGBoost
-#use code from the lecture notes, defining the XGBoost recipe
+#Using code from the lecture notes, defining the XGBoost recipe
 gb_recipe <- 
   recipe(
     los_long ~ ., 
@@ -223,7 +231,6 @@ gb_recipe <-
   step_normalize(all_numeric_predictors()) 
 
 #Creating the XGBoost model with the parameters we want to tune
-
 gb_mod <- 
   boost_tree(
     mode = "classification",
@@ -239,25 +246,24 @@ gb_wf <- workflow() |>
   add_model(gb_mod)
 
 #Defining the parameter grid we want to try in 5-fold CV
-param_grid <- grid_regular(
-  tree_depth(range = c(1L, 3L)),
-  learn_rate(range = c(-5, 2), trans = log10_trans()),
-  levels = c(3, 10)
+param_grid_gb <- grid_regular(
+  tree_depth(range = c(3L, 5L)),
+  learn_rate(range = c(1,2), trans = log10_trans()),
+  levels = c(3, 2)
   )
 
 #Setting seed for 5-fold CV
 set.seed(203)
 
 #Creating the 5-folds
-folds <- vfold_cv(mimiciv_icu_cohort, v = 5)
-
+folds_gb <- vfold_cv(mimiciv_icu_cohort, v = 5)
 
 #Fitting the XGBoost model with the tunable parameters with the
 #metrics of roc/auc and accuracy
 gb_fit <- gb_wf |>
   tune_grid(
-    resamples = folds,
-    grid = param_grid,
+    resamples = folds_gb,
+    grid = param_grid_gb,
     metrics = metric_set(roc_auc, accuracy)
     )
 
@@ -281,7 +287,7 @@ final_fit_gb |>
 
 ```{r}
 #SVM
-#use code from the lecture notes, defining the SVM recipe
+#Using code from the lecture notes, defining the SVM recipe
 svm_recipe <- 
   recipe(
     los_long ~ ., 
@@ -300,6 +306,116 @@ svm_recipe <-
   step_zv(all_numeric_predictors()) %>%
   # center and scale numeric data
   step_normalize(all_numeric_predictors()) 
+
+#Creating the SVM model with the parameters we want to tune
+svm_mod <- 
+  svm_rbf(
+    mode = "classification",
+    cost = tune(),
+    rbf_sigma = tune()
+  ) |> 
+  set_engine("kernlab")
+
+#Creating the SVM workflow with the recipe and model
+svm_wf <- workflow() |>
+  add_recipe(svm_recipe) |>
+  add_model(svm_mod)
+
+#Defining the parameter grid we want to try in 5-fold CV
+param_grid_SVM <- grid_regular(
+  cost(range = c(-2, 2)),
+  rbf_sigma(range = c(-5, -3)),
+  levels = c(4, 4)
+  )
+
+#Setting seed for 2-fold CV
+set.seed(203)
+#Creating the 2-folds
+folds_svm <- vfold_cv(mimiciv_icu_cohort, v = 2)
+
+#Fitting the SVM model with the tunable parameters with the
+#metrics of roc/auc and accuracy
+svm_fit <- svm_wf |>
+  tune_grid(
+    resamples = folds_svm,
+    grid = param_grid_SVM,
+    metrics = metric_set(roc_auc, accuracy)
+    )
+
+best_svm <- svm_fit |>
+  select_best(metric = "roc_auc")
+
+#Creating the final workflow with the best SVM model
+final_wf_svm <- svm_wf |>
+  finalize_workflow(best_svm)
+
+#Fit the best model with the training data, then test it on the test data
+final_fit_svm <- 
+  final_wf_svm |>
+  last_fit(data_split)
+
+#Collecting the metrics of the best SVM model.
+final_fit_svm |> 
+  collect_metrics()
+```
+
+```{r}
+#Model Stacking
+
+#We set up the folds shared across all models
+#We use 2-fold CV for computational efficiency
+set.seed(203)
+folds_stack <- vfold_cv(Heart_other, v = 2)
+
+#Using code from the lecture notes, defining the stack 
+los_model_st <- 
+  # initialize the stack
+  stacks() |>
+  # add candidate members
+  add_candidates(logit_fit) |>
+  add_candidates(gb_fit) |>
+  add_candidates(svm_fit) |>
+  # determine how to combine their predictions
+  blend_predictions(
+    penalty = 10^(-6:2),
+    metrics = c("roc_auc")
+    ) |>
+  # fit the candidates with nonzero stacking coefficients
+  fit_members()
+
+#Predicting los_long with the stacked models
+los_pred <- los_test %>%
+  bind_cols(predict(los_model_st, ., type = "prob")) %>%
+  print(width = Inf)
+
+#Calculating ROC of model stack
+yardstick::roc_auc(
+  los_pred,
+  truth = los_long,
+  contains(".pred_No")
+  )
+
+#Generating predictions from each of the ensemble members
+los_pred <-
+  los_test |>
+  select(los_long) |>
+  bind_cols(
+    predict(
+      los_model_st,
+      los_test,
+      type = "class",
+      members = TRUE
+      )
+    ) 
+
 ```
 
 4.  Compare model classification performance on the test set. Report both the area under ROC curve and accuracy for each machine learning algorithm and the model stacking. Interpret the results. What are the most important features in predicting long ICU stays? How do the models compare in terms of performance and interpretability?
+
+**Solution:**
+```{r}
+#Determining the most important features for predicting long ICU stays
+
+#Logistic Regression
+vip(best_logit)
+```
