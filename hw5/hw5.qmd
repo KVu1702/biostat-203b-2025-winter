@@ -170,23 +170,30 @@ logit_wf <- workflow() |>
   add_model(logit_mod) 
 
 #Defining the parameter grid we want to try in 5-fold CV
+#Before simplifying the parameter grid, the original parameter grid is as follows:
+# param_grid <- grid_regular(
+#   penalty(range = c(-8, 3)), 
+#   mixture(),
+#   levels = c(100, 5)
+#   )
 param_grid_logit <- grid_regular(
-  penalty(range = c(-8, -6)), 
-  mixture(range = c(0, 1)),
-  levels = c(5, 2)
+  penalty(range = c(-8, -8)), 
+  mixture(range = c(0, 0)),
+  levels = c(1, 1)
   ) 
 
 #Setting seed for 5-fold CV
 set.seed(203)
 
-#Creating the 5-folds
-folds_logit <- vfold_cv(mimiciv_icu_cohort, v = 5)
+#Creating the 5-folds used for all 3 models
+folds <- vfold_cv(mimiciv_icu_cohort, v = 5)
 
 #Fitting the logistic regression model with the tunable parameters with the
 #metrics of roc/auc and accuracy
 logit_fit <- logit_wf |>
   tune_grid(
-    resamples = folds_logit,
+    resamples = folds,
+    control = control_resamples(save_pred = TRUE, save_workflow = TRUE),
     grid = param_grid_logit,
     metrics = metric_set(roc_auc, accuracy)
     )
@@ -246,23 +253,25 @@ gb_wf <- workflow() |>
   add_model(gb_mod)
 
 #Defining the parameter grid we want to try in 5-fold CV
+#Before simplifying the parameter grid, the original parameter grid is as follows:
+#param_grid <- grid_regular(
+#   tree_depth(range = c(1L, 5L)),
+#   learn_rate(range = c(-5, 2), trans = log10_trans()),
+#   levels = c(3, 10)
+#   )
+
 param_grid_gb <- grid_regular(
-  tree_depth(range = c(3L, 5L)),
-  learn_rate(range = c(1,2), trans = log10_trans()),
-  levels = c(3, 2)
+  tree_depth(range = c(4L, 4L)),
+  learn_rate(range = c(-2,-2), trans = log10_trans()),
+  levels = c(1, 1)
   )
-
-#Setting seed for 5-fold CV
-set.seed(203)
-
-#Creating the 5-folds
-folds_gb <- vfold_cv(mimiciv_icu_cohort, v = 5)
 
 #Fitting the XGBoost model with the tunable parameters with the
 #metrics of roc/auc and accuracy
 gb_fit <- gb_wf |>
   tune_grid(
-    resamples = folds_gb,
+    resamples = folds,
+    control = control_resamples(save_pred = TRUE, save_workflow = TRUE),
     grid = param_grid_gb,
     metrics = metric_set(roc_auc, accuracy)
     )
@@ -286,9 +295,9 @@ final_fit_gb |>
 ```
 
 ```{r}
-#SVM
-#Using code from the lecture notes, defining the SVM recipe
-svm_recipe <- 
+#RF
+#Using code from the lecture notes, defining the RF recipe
+rf_recipe <- 
   recipe(
     los_long ~ ., 
     data = mimiciv_icu_cohort
@@ -307,74 +316,75 @@ svm_recipe <-
   # center and scale numeric data
   step_normalize(all_numeric_predictors()) 
 
-#Creating the SVM model with the parameters we want to tune
-svm_mod <- 
-  svm_rbf(
+#Creating the RF model with the parameters we want to tune
+rf_mod <- 
+  rand_forest(
     mode = "classification",
-    cost = tune(),
-    rbf_sigma = tune()
-  ) |> 
-  set_engine("kernlab")
+    # Number of predictors randomly sampled in each split
+    mtry = tune(),
+    # Number of trees in ensemble
+    trees = tune()
+  ) |>
+  set_engine("ranger", importance = "impurity")
 
-#Creating the SVM workflow with the recipe and model
-svm_wf <- workflow() |>
-  add_recipe(svm_recipe) |>
-  add_model(svm_mod)
+#Creating the rf workflow with the recipe and model
+rf_wf <- workflow() |>
+  add_recipe(rf_recipe) |>
+  add_model(rf_mod)
 
 #Defining the parameter grid we want to try in 5-fold CV
-param_grid_SVM <- grid_regular(
-  cost(range = c(-2, 2)),
-  rbf_sigma(range = c(-5, -3)),
-  levels = c(4, 4)
+#Before simplifying the parameter grid, the original parameter grid is as follows:
+# param_grid_rf <- grid_regular(
+#   trees(range = c(100L, 500L)), 
+#   mtry(range = c(1L, 5L)),
+#   levels = c(5, 5)
+#   )
+param_grid_rf <- grid_regular(
+  trees(range = c(500L, 500L)), 
+  mtry(range = c(1L, 1L)),
+  levels = c(1, 1)
   )
 
-#Setting seed for 2-fold CV
-set.seed(203)
-#Creating the 2-folds
-folds_svm <- vfold_cv(mimiciv_icu_cohort, v = 2)
-
-#Fitting the SVM model with the tunable parameters with the
+#Fitting the RF model with the tunable parameters with the
 #metrics of roc/auc and accuracy
-svm_fit <- svm_wf |>
+rf_fit <- rf_wf |>
   tune_grid(
-    resamples = folds_svm,
-    grid = param_grid_SVM,
+    resamples = folds,
+    control = control_resamples(save_pred = TRUE, save_workflow = TRUE),
+    grid = param_grid_rf,
     metrics = metric_set(roc_auc, accuracy)
     )
 
-best_svm <- svm_fit |>
+#Selecting the best model as the one with the highest roc/auc
+best_rf <- rf_fit |>
   select_best(metric = "roc_auc")
 
-#Creating the final workflow with the best SVM model
-final_wf_svm <- svm_wf |>
-  finalize_workflow(best_svm)
+#Creating the final workflow with the best RF model
+final_wf_rf <- rf_wf |>
+  finalize_workflow(best_rf)
 
 #Fit the best model with the training data, then test it on the test data
-final_fit_svm <- 
-  final_wf_svm |>
+final_fit_rf <- 
+  final_wf_rf |>
   last_fit(data_split)
 
-#Collecting the metrics of the best SVM model.
-final_fit_svm |> 
+#Collecting the metrics of the best RF model.
+final_fit_rf |> 
   collect_metrics()
 ```
 
 ```{r}
 #Model Stacking
 
-#We set up the folds shared across all models
-#We use 2-fold CV for computational efficiency
-set.seed(203)
-folds_stack <- vfold_cv(Heart_other, v = 2)
-
 #Using code from the lecture notes, defining the stack 
 los_model_st <- 
   # initialize the stack
   stacks() |>
-  # add candidate members
+  # add candidate members, we use the best fitting models for computational 
+  # efficiency
   add_candidates(logit_fit) |>
   add_candidates(gb_fit) |>
-  add_candidates(svm_fit) |>
+  add_candidates(rf_fit) |>
   # determine how to combine their predictions
   blend_predictions(
     penalty = 10^(-6:2),
@@ -392,21 +402,8 @@ los_pred <- los_test %>%
 yardstick::roc_auc(
   los_pred,
   truth = los_long,
-  contains(".pred_No")
+  contains(".pred_FALSE")
   )
-
-#Generating predictions from each of the ensemble members
-los_pred <-
-  los_test |>
-  select(los_long) |>
-  bind_cols(
-    predict(
-      los_model_st,
-      los_test,
-      type = "class",
-      members = TRUE
-      )
-    ) 
 
 ```
 
@@ -417,5 +414,17 @@ los_pred <-
 #Determining the most important features for predicting long ICU stays
 
 #Logistic Regression
-vip(best_logit)
+final_fit_logit %>% 
+  extract_fit_parsnip() %>% 
+  vip(num_features = 10)
+
+#XGBoost
+final_fit_gb %>% 
+  extract_fit_parsnip() %>% 
+  vip(num_features = 10)
+
+#RF
+final_fit_rf %>% 
+  extract_fit_parsnip() %>% 
+  vip(num_features = 10)
 ```
