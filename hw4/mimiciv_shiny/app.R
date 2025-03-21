@@ -62,6 +62,7 @@ ui <- dashboardPage(
             ), 
           width = "100%", selected = "(Select)"),
           width = "100%", height = "100%",
+          tableOutput("cohort_summary_table"),
           plotOutput("cohort_summary_plot"))
         ),
       tabItem("patient",
@@ -74,7 +75,8 @@ ui <- dashboardPage(
             options = list(placeholder = "Type"),
             width = "100%"),
           width = "100%", height = "100%",
-          plotOutput("patient_summary_plot")
+          plotOutput("ADT_summary_plot"),
+          plotOutput("ICU_sumamry_plot")
         )
       )
     )
@@ -83,7 +85,7 @@ ui <- dashboardPage(
 
 server <- function(input, output, session) {
   
-  #Creating the cohort summary plots
+  #Creating the cohort summary plots and numerical summaries
   output$cohort_summary_plot <- renderPlot({
     
     variable <- gsub(" ", "_", tolower(input$Variables))
@@ -185,6 +187,77 @@ server <- function(input, output, session) {
     }
   )
   
+  output$cohort_summary_table <- renderTable({
+    
+    variable <- gsub(" ", "_", tolower(input$Variables))
+    
+    #Demographic information
+    if (variable == "age_intime") {
+      res <- rbind(summary(mimic_icu_cohort$age_intime))
+      rownames(res) <- c(
+        "Age at in time"
+      )
+      as.data.frame(res)
+    }
+    else if (variable == "race") {
+      mimic_icu_cohort %>%
+        count(race)
+    }
+    else if (variable == "insurance") {
+      mimic_icu_cohort %>%
+        count(insurance)
+    }
+    else if (variable == "marital_status") {
+      mimic_icu_cohort %>%
+        count(marital_status)
+    }
+    else if (variable == "gender") {
+      mimic_icu_cohort %>%
+        count(gender)
+    }
+    else if (variable == "lab_events") {
+      res <- rbind(
+        summary(mimic_icu_cohort$hematocrit),
+        summary(mimic_icu_cohort$respiratory_rate),
+        summary(mimic_icu_cohort$bicarbonate),
+        summary(mimic_icu_cohort$chloride),
+        summary(mimic_icu_cohort$wbc),
+        summary(mimic_icu_cohort$creatinine),
+        summary(mimic_icu_cohort$glucose),
+        summary(mimic_icu_cohort$potassium)
+        )
+      rownames(res) <- c(
+        "Hematocrit",
+        "Sodium",
+        "Bicarbonate",
+        "Chloride",
+        "White blood cells",
+        "Creatinine",
+        "Glucose",
+        "Potassium"
+      )
+      as.data.frame(res)
+    }
+    else if (variable == "chart_events") {
+      res <- rbind(
+        summary(mimic_icu_cohort$temperature_fahrenheit),
+        summary(mimic_icu_cohort$respiratory_rate),
+        summary(mimic_icu_cohort$non_invasive_blood_pressure_diastolic),
+        summary(mimic_icu_cohort$non_invasive_blood_pressure_systolic),
+        summary(mimic_icu_cohort$heart_rate)
+      )
+      rownames(res) <- c(
+        "Temperature Fahrenheit",
+        "Respiratory Rate",
+        "Diastolic Non-invasive Blood Pressure",
+        "Systolic Non-invasive Blood Pressure",
+        "Heart Rate"
+      )
+      as.data.frame(res)
+    }
+  }, rownames = TRUE
+  )
+  
   #Dynamic loading of patient IDs
   observe({
     updateSelectizeInput(session, "Patient_ID", 
@@ -193,7 +266,7 @@ server <- function(input, output, session) {
   })
 
   #Creating the patient ADT and ICU stay chart
-  output$patient_summary_plot <- renderPlot({
+  output$ADT_summary_plot <- renderPlot({
     
     req(input$Patient_ID)
     #Setting our patient ID
@@ -329,6 +402,66 @@ server <- function(input, output, session) {
            shape = "Procedure") +
       guides(color = guide_legend(order = 1),
              shape = guide_legend(order = 2))
+    
+  })
+  
+  output$ICU_sumamry_plot <- renderPlot({
+    req(input$Patient_ID)
+    #Setting our patient ID
+    ID <- as.numeric(input$Patient_ID)
+    
+    #Reading in icustays.csv.gz
+    icustays_tbl <- tbl(con_bq, "icustays") %>%
+      collect()
+    
+    subset_itemid <-c(220045, 220180, 220179, 223761, 220210)
+    
+    chartevents_tbl <- tbl(con_bq, "chartevents") %>% 
+      #Filering based on subject ID
+      filter(subject_id %in% ID) %>%
+      #Subset based on needed measurements
+      filter(itemid %in% subset_itemid) %>%
+      #Sorting our values
+      arrange(itemid, charttime) %>%
+      collect()
+    #Converting time to UTC and not PDT
+    chartevents_tbl$charttime <- as.POSIXct(chartevents_tbl$charttime, 
+                                            tz = "UTC")
+    
+    
+    #We left join chartevents and icustays by stay_id to differentiate the unique
+    #icu stays for each measurement
+    joined_icu_chart_tbl <- left_join(chartevents_tbl, 
+                                      icustays_tbl, 
+                                      by = "stay_id")
+    
+    #We rename the item_id with their abbreviations by utilizing d_items.csv.gz
+    d_items_tbl <- tbl(con_bq, "d_items") %>% 
+      collect()
+    #We left join with our chart events on itemid
+    joined_icu_chart_tbl <- left_join(joined_icu_chart_tbl, 
+                                      d_items_tbl, 
+                                      by = "itemid") 
+    
+    
+    #Creating our title
+    subject_title <- paste0("Patient ", ID, ", ICU stays - Vitals")
+    
+    #Note, our y is value and not valuenum, we want the values to be a double
+    #and not a string
+    ggplot(joined_icu_chart_tbl, mapping = aes(x = charttime, y = valuenum, 
+                                               color = abbreviation, 
+                                               group = abbreviation)) +
+      geom_point() +
+      geom_line() +
+      facet_grid(abbreviation~stay_id, scales = "free", space = "fixed") +
+      scale_x_datetime(guide = guide_axis(n.dodge = 2)) + 
+      theme(
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        legend.position = "none"
+      ) + 
+      labs(title = subject_title)
     
   })
 }
