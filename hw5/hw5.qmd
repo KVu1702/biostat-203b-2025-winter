@@ -3,6 +3,7 @@ title: "Biostat 203B Homework 5"
 subtitle: Due Mar 20 @ 11:59PM
 author: "Your Name and UID"
 format:
+  pdf: default
   html:
     theme: cosmo
     embed-resources: true
@@ -111,6 +112,23 @@ table(mimiciv_icu_cohort$los_long)
 
 ```{r}
 #| eval: false
+set.seed(203)
+
+# sort
+mimiciv_icu_cohort <- mimiciv_icu_cohort |>
+  arrange(subject_id, hadm_id, stay_id)
+
+data_split <- initial_split(
+  mimiciv_icu_cohort, 
+  # stratify by los_long
+  strata = "los_long", 
+  prop = 0.5
+  )
+```
+
+**Solution:**
+
+```{r}
 set.seed(203)
 
 # sort
