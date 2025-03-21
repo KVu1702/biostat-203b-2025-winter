@@ -102,6 +102,9 @@ mimiciv_icu_cohort <- mimiciv_icu_cohort %>%
   filter(!glucose %in% boxplot.stats(glucose)$out) %>%
   filter(!potassium %in% boxplot.stats(potassium)$out)
 
+#Ensuring the outcome feature is balanced
+table(mimiciv_icu_cohort$los_long)
+
 ```
 
 2.  Partition data into 50% training set and 50% test set. Stratify partitioning according to `los_long`. For grading purpose, sort the data by `subject_id`, `hadm_id`, and `stay_id` and use the seed `203` for the initial data split. Below is the sample code.
@@ -190,6 +193,8 @@ folds <- vfold_cv(mimiciv_icu_cohort, v = 5)
 
 #Fitting the logistic regression model with the tunable parameters with the
 #metrics of roc/auc and accuracy
+#Setting the seed to ensure reproducibility of the logistic regression model.
+set.seed(203)
 logit_fit <- logit_wf |>
   tune_grid(
     resamples = folds,
@@ -268,6 +273,8 @@ param_grid_gb <- grid_regular(
 
 #Fitting the XGBoost model with the tunable parameters with the
 #metrics of roc/auc and accuracy
+#Setting the seed to ensure reproducibility of the XGBoost model.
+set.seed(203)
 gb_fit <- gb_wf |>
   tune_grid(
     resamples = folds,
@@ -347,6 +354,8 @@ param_grid_rf <- grid_regular(
 
 #Fitting the RF model with the tunable parameters with the
 #metrics of roc/auc and accuracy
+#Setting the seed to ensure reproducibility of the RF model.
+set.seed(203)
 rf_fit <- rf_wf |>
   tune_grid(
     resamples = folds,
@@ -394,9 +403,12 @@ los_model_st <-
   fit_members()
 
 #Predicting los_long with the stacked models
+#Setting the seed to ensure reproducibility of the stacked model.
+set.seed(203)
+
+#Outputting the predictions of the stacked model as a probability
 los_pred <- los_test %>%
-  bind_cols(predict(los_model_st, ., type = "prob")) %>%
-  print(width = Inf)
+  bind_cols(predict(los_model_st, ., type = "prob"))
 
 #Calculating ROC of model stack
 yardstick::roc_auc(
@@ -404,6 +416,32 @@ yardstick::roc_auc(
   truth = los_long,
   contains(".pred_FALSE")
   )
+
+#Generating predictions from the ensemble members
+#Setting the seed to ensure reproducibility of the stacked model.
+set.seed(203)
+los_pred <-
+  los_test |>
+  select(los_long) |>
+  bind_cols(
+    predict(
+      los_model_st,
+      los_test,
+      type = "class",
+      members = TRUE
+      )
+    )
+
+#Calculating accuracy of model stack
+#We compute the proportion of predictions from the ensemble members that
+#agree with the actual labels
+map(
+  colnames(los_pred),
+  ~mean(los_pred$los_long  == pull(los_pred, .x))
+  ) |>
+  set_names(colnames(los_pred)) |>
+  as_tibble() |>
+  pivot_longer(c(everything(), -los_long))
 
 ```
 
@@ -428,3 +466,18 @@ final_fit_rf %>%
   extract_fit_parsnip() %>% 
   vip(num_features = 10)
 ```
+
+The logistic regression model's area under the curve (AUC) and accuracy are 0.550 and 0.531, respectively.
+The XGBoost model's area under the curve (AUC) and accuracy are 0.571 and 0.553, respectively.
+The RF model's area under the curve (AUC) and accuracy are 0.563 and 0.548, respectively.
+The stacked model's area under the curve (AUC) and accuracy are 0.820 and 0.751, respectively.
+
+Based on these results, the best-performing individual model is the gradient-boosted model, while the best-performing model overall is the stacked model. The individual models did not perform very well because all three models failed to exceed AUCs and accuracies of 0.60. The gradient-boosted model most likely performed the best because it is a more complex model, using gradient descent to optimize the sequential building and corrections of weak learners in the model. On the other hand, logistic regression is a relatively simple model and can not handle nonlinear relationships. Similarly, random forests rely on the chance of independent tree ensembles and do not build on the mistakes of others.
+
+The stacked model performed much better and saw increases of up to 0.27 in AUC and 22% in accuracy. This performance is expected of stacked models since we can utilize and draw on the strengths of different model architectures instead of relegating ourselves to the weakness of using a singular model. However, for making medical predictions, we still would want to aim for higher AUCs and accuracy, preferably far exceeding 0.90, since the ramifications of making incorrect medical predictions could cost lives. To do this, we want to try to use more advanced models such as neural networks (MLP, RNN, LSTM, Transformers, etc.), perform a more extensive grid search of acceptable parameters, or add/use a different set of features such as demographic information/chart events.
+
+Using `vip()` to determine important features in predicting long ICU stays, we see that hematocrit and white blood cell levels are consistently the most important features across the three models (logistic regression, XGBoost, and random forest). A medical explanation could be that more serious diseases generally affect the blood, such as leukemia, HIV, etc., and require prolonged ICU stays to treat. The logistic model seems the most interpretable, as only five features have significant importance, while the XGBoost and RF models designate significant importance to all features. 
+
+
+
+
